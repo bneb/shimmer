@@ -1,0 +1,38 @@
+[package]
+name = "shimmer"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "shimmer"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive"] }
+llama-cpp-2 = { version = "0.1.149", features = ["metal"] }
+llama-cpp-sys-2 = "0.1.149"
+metal = "0.33.0"
+regex = "1.12.4"
+rustyline = "18.0.0"
+tokio = { version = "1.36", features = ["rt-multi-thread", "macros", "sync"] }
+axum = { version = "0.7", features = ["macros"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower-http = { version = "0.5", features = ["cors", "limit"] }
+tower = "0.4"
+uuid = { version = "1", features = ["v4"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+shlex = "2.0.1"
+ignore = "0.4.26"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.9"
+
+[[bench]]
+name = "parsing_bench"
+harness = false
+
+[dev-dependencies]
+tempfile = "3.27.0"
+criterion = { version = "0.5", features = ["html_reports"] }

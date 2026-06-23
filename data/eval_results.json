@@ -1,0 +1,22 @@
+{
+  "model": "gemma4-12b",
+  "sample_cfg": "temp=0.0,topk=0,repp=1.0",
+  "instances": 1,
+  "total_wall_s": 357.0,
+  "results": [
+    {
+      "instance_id": "django__django-10914",
+      "model": "shimmer-gemma4-12b",
+      "wall_time_s": 174.1,
+      "patch_chars": 625,
+      "tps": 1.69,
+      "tool_calls": 4,
+      "edits_found": 2,
+      "edits_applied": 1,
+      "edits_failed": 1,
+      "tests_pass": null,
+      "model_patch": "diff --git a/django/conf/global_settings.py b/django/conf/global_settings.py\nindex acee9887d2..bdeec80610 100644\n--- a/django/conf/global_settings.py\n+++ b/django/conf/global_settings.py\n@@ -304,7 +304,7 @@ FILE_UPLOAD_TEMP_DIR = None\n \n # The numeric mode to set newly-uploaded files to. The value should be a mode\n # you'd pass directly to os.chmod; see https://docs.python.org/library/os.html#files-and-directories.\n-FILE_UPLOAD_PERMISSIONS = None\n+FILE_UPLOAD_PERMISSIONS = 0o644\n \n # The numeric mode to assign to newly-created directories, when uploading files.\n # The value should be a mode as you'd pass to os.chmod;\n",
+      "sample_cfg": "temp=0.0,topk=0,repp=1.0"
+    }
+  ]
+}

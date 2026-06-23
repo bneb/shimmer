@@ -1,0 +1,22 @@
+## Repository Structure
+```
+  [file] Cargo.toml
+  [file] run_sanitizers.sh
+  [dir] tests
+  [file] Cargo.lock
+  [dir] models
+  [dir] docs
+  [file] README.md
+  [dir] logs
+  [dir] benchmarks
+  [dir] scripts
+  [dir] data
+  [file] CLAUDE.md
+  [dir] src
+```
+
+## Test Files
+  - tests/smoke_test.py
+  - tests/tdd_enforcement_tests.rs
+  - tests/test_kv_cache_integrity.rs
+

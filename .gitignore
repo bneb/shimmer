@@ -1,0 +1,32 @@
+/target
+benchmarks/apex/apex_benchmark_env
+benchmarks/stress_test/stress_test_env/
+
+# Build artifacts & logs
+*.log
+*.log.bak
+*.bak
+
+# Model files (large binaries)
+models/
+
+# Evaluation outputs
+predictions.jsonl
+predictions.jsonl.bak
+
+# Scratch / temp files
+agent_output.txt
+agent_responses.log
+agy_eval.log
+crash.log
+shimmer.log
+revert_swe.py
+patch_*.py
+shimmer-*.json
+
+# Environment & logs
+tests/venv/
+logs/
+
+# Scratch test artifacts (root only)
+/test_*

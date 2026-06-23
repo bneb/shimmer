@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <!-- Circle clipping mask to constrain the scene, leaving outside transparent -->
+    <clipPath id="circleClip">
+      <circle cx="200" cy="200" r="190" />
+    </clipPath>
+
+    <!-- Watercolor Texture Filter (Cezanne painterly aesthetic) -->
+    <filter id="watercolor" x="-10%" y="-10%" width="120%" height="120%">
+      <!-- Organic brush texture -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.04" numOctaves="4" result="noise" />
+      <!-- Displace elements to look hand-painted -->
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="15" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+      <!-- Paper grain / texture overlay -->
+      <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.3 0" in="noise" result="faintNoise" />
+      <feBlend mode="multiply" in="displaced" in2="faintNoise" result="blended" />
+      <!-- Restrict the noise texture so it doesn't bleed into transparent background -->
+      <feComposite operator="in" in="blended" in2="displaced" />
+    </filter>
+
+    <!-- Evening Sky Gradient (Cezanne uses deep, expressive layered skies) -->
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a5d8c" stop-opacity="1" />
+      <stop offset="40%" stop-color="#8a7391" stop-opacity="1" />
+      <stop offset="80%" stop-color="#e8a87c" stop-opacity="1" />
+      <stop offset="100%" stop-color="#ffcc5c" stop-opacity="1" />
+    </linearGradient>
+
+    <!-- Water Gradient (reflecting the sky but deeper and cooler) -->
+    <linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cc8a5c" stop-opacity="1" />
+      <stop offset="30%" stop-color="#6b8e9b" stop-opacity="1" />
+      <stop offset="100%" stop-color="#2c4b6b" stop-opacity="1" />
+    </linearGradient>
+
+    <!-- Sun Radial Gradient -->
+    <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="30%" stop-color="#ffeeaa" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ff9955" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Animated Shimmer Gradients on Water Highlights (Subtle overlapping beams) -->
+    <linearGradient id="shimmerGrad1" x1="-100%" y1="0%" x2="200%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="45%" stop-color="#ffeeaa" stop-opacity="0.6" />
+      <stop offset="55%" stop-color="#ffcc5c" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0" />
+      <animate attributeName="x1" values="-100%;100%;-100%" dur="5s" repeatCount="indefinite" />
+      <animate attributeName="x2" values="0%;200%;0%" dur="5s" repeatCount="indefinite" />
+    </linearGradient>
+
+    <linearGradient id="shimmerGrad2" x1="-100%" y1="0%" x2="200%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="45%" stop-color="#ffeeaa" stop-opacity="0.5" />
+      <stop offset="55%" stop-color="#ffcc5c" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0" />
+      <animate attributeName="x1" values="-100%;100%;-100%" dur="7s" repeatCount="indefinite" />
+      <animate attributeName="x2" values="0%;200%;0%" dur="7s" repeatCount="indefinite" />
+    </linearGradient>
+  </defs>
+
+  <!-- The entire composition is restricted to the interior of the circle -->
+  <g clip-path="url(#circleClip)">
+    
+    <!-- Base Sky Canvas -->
+    <rect x="0" y="0" width="400" height="230" fill="url(#skyGrad)" filter="url(#watercolor)" />
+    
+    <!-- Cezanne-style blocky brush strokes in the Sky -->
+    <g filter="url(#watercolor)">
+      <!-- Deep blue/purple upper strokes -->
+      <polygon points="30,40 160,60 110,130" fill="#3a4d7c" opacity="0.5" />
+      <polygon points="240,30 360,80 290,150" fill="#5a4361" opacity="0.5" />
+      <!-- Mid-sky warm strokes -->
+      <polygon points="60,160 210,140 170,200" fill="#e8885c" opacity="0.6" />
+      <polygon points="270,140 390,180 310,230" fill="#ffaa44" opacity="0.6" />
+      <polygon points="-20,180 100,210 50,240" fill="#ffaa44" opacity="0.5" />
+    </g>
+
+    <!-- The Evening Sun -->
+    <circle cx="200" cy="190" r="50" fill="url(#sunGrad)">
+      <!-- Subtle pulsing of the sun's aura -->
+      <animate attributeName="r" values="46;54;46" dur="6s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.85;1;0.85" dur="6s" repeatCount="indefinite" />
+    </circle>
+
+    <!-- Base Water Canvas (Horizon line at y=230) -->
+    <rect x="0" y="230" width="400" height="170" fill="url(#waterGrad)" filter="url(#watercolor)" />
+
+    <!-- Cezanne-style blocky brush strokes in the Water (Waves) -->
+    <g filter="url(#watercolor)">
+      <!-- Horizon warm reflections -->
+      <polygon points="0,240 160,245 90,260" fill="#aa6a4c" opacity="0.7">
+        <animate attributeName="opacity" values="0.7;0.85;0.7" dur="3.1s" repeatCount="indefinite" />
+      </polygon>
+      <polygon points="240,235 400,250 320,270" fill="#aa7755" opacity="0.7">
+        <animate attributeName="points" values="240,235 400,250 320,270; 240,237 400,248 320,272; 240,235 400,250 320,270" dur="4.3s" repeatCount="indefinite" />
+      </polygon>
+      
+      <!-- Mid-water cool waves -->
+      <polygon points="-10,270 140,280 70,300" fill="#4b6e7b" opacity="0.8">
+        <animate attributeName="points" values="-10,270 140,280 70,300; -10,273 140,277 70,303; -10,270 140,280 70,300" dur="5.7s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.8;0.65;0.8" dur="5.7s" repeatCount="indefinite" />
+      </polygon>
+      <polygon points="220,265 410,285 310,315" fill="#3b5e6b" opacity="0.8">
+        <animate attributeName="opacity" values="0.8;0.95;0.8" dur="4.1s" repeatCount="indefinite" />
+      </polygon>
+      
+      <!-- Deep foreground waves -->
+      <polygon points="40,320 230,330 130,370" fill="#1c2b4b" opacity="0.9">
+        <animate attributeName="points" values="40,320 230,330 130,370; 40,325 230,325 130,375; 40,320 230,330 130,370" dur="6.1s" repeatCount="indefinite" />
+      </polygon>
+      <polygon points="260,310 420,340 330,390" fill="#1c3b5b" opacity="0.9">
+        <animate attributeName="opacity" values="0.9;0.7;0.9" dur="7.3s" repeatCount="indefinite" />
+      </polygon>
+      <polygon points="-20,350 100,370 40,410" fill="#15213b" opacity="0.9">
+        <animate attributeName="points" values="-20,350 100,370 40,410; -20,355 100,365 40,415; -20,350 100,370 40,410" dur="4.7s" repeatCount="indefinite" />
+      </polygon>
+      <polygon points="200,360 300,380 240,420" fill="#15213b" opacity="0.9">
+        <animate attributeName="opacity" values="0.9;0.75;0.9" dur="5.9s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+    <!-- Animated Shimmering Water Reflections (Sun Path) -->
+    <g filter="url(#watercolor)">
+      <!-- These layered horizontal blocks represent light catching the crests of the waves -->
+      <polygon points="175,235 225,235 215,242 185,242" fill="url(#shimmerGrad1)">
+        <animate attributeName="opacity" values="1;0.4;1" dur="2.9s" repeatCount="indefinite" />
+      </polygon>
+      
+      <polygon points="160,248 240,248 225,258 175,258" fill="url(#shimmerGrad2)" opacity="0.9">
+        <!-- Slight vertical bobbing for wave motion -->
+        <animate attributeName="points" values="160,248 240,248 225,258 175,258; 160,246 240,246 225,256 175,256; 160,248 240,248 225,258 175,258" dur="3.7s" repeatCount="indefinite" />
+      </polygon>
+      
+      <polygon points="145,265 255,265 235,278 165,278" fill="url(#shimmerGrad1)" opacity="0.8">
+        <animate attributeName="points" values="145,265 255,265 235,278 165,278; 145,268 255,268 235,281 165,281; 145,265 255,265 235,278 165,278" dur="4.1s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.8;0.3;0.8" dur="5.3s" repeatCount="indefinite" />
+      </polygon>
+      
+      <polygon points="130,288 270,288 240,305 160,305" fill="url(#shimmerGrad2)" opacity="0.7">
+        <animate attributeName="points" values="130,288 270,288 240,305 160,305; 130,285 270,285 240,302 160,302; 130,288 270,288 240,305 160,305" dur="4.7s" repeatCount="indefinite" />
+      </polygon>
+      
+      <polygon points="100,320 300,320 260,345 140,345" fill="url(#shimmerGrad1)" opacity="0.6">
+        <animate attributeName="points" values="100,320 300,320 260,345 140,345; 100,324 300,324 260,349 140,349; 100,320 300,320 260,345 140,345" dur="6.1s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.6;0.2;0.6" dur="7.9s" repeatCount="indefinite" />
+      </polygon>
+      
+      <polygon points="60,365 340,365 280,395 120,395" fill="url(#shimmerGrad2)" opacity="0.5">
+        <animate attributeName="points" values="60,365 340,365 280,395 120,395; 60,360 340,360 280,390 120,390; 60,365 340,365 280,395 120,395" dur="6.7s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+  </g>
+  
+  <!-- Outer Ring to frame the circular icon nicely -->
+  <circle cx="200" cy="200" r="190" fill="none" stroke="#2c4b6b" stroke-width="6" opacity="0.6" filter="url(#watercolor)"/>
+</svg>
