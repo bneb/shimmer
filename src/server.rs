@@ -3,8 +3,13 @@
 //! This module implements an OpenAI-compatible HTTP server using Axum, providing streaming and non-streaming
 //! chat completion endpoints.
 
+use std::convert::Infallible;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use axum::{
-    Json, Router, body::Body,
+    Json, Router,
+    body::Body,
     extract::State,
     http::StatusCode,
     middleware::{self, from_fn_with_state},
@@ -14,10 +19,8 @@ use axum::{
     },
     routing::{get, post},
 };
+use llama_cpp_2::llama_backend::LlamaBackend;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -26,7 +29,6 @@ use tower_http::limit::RequestBodyLimitLayer;
 use uuid::Uuid;
 
 use crate::agent::Agent;
-use llama_cpp_2::llama_backend::LlamaBackend;
 
 /// Represents a single chat message containing a role and its corresponding content.
 #[derive(Deserialize)]
@@ -120,7 +122,8 @@ async fn timeout_handler(
     request: axum::http::Request<Body>,
     next: middleware::Next,
 ) -> impl IntoResponse {
-    let Ok(response) = tokio::time::timeout(std::time::Duration::from_secs(300), next.run(request)).await
+    let Ok(response) =
+        tokio::time::timeout(std::time::Duration::from_secs(300), next.run(request)).await
     else {
         return (StatusCode::REQUEST_TIMEOUT, "Request timed out").into_response();
     };
@@ -162,13 +165,17 @@ async fn auth_middleware(
             .and_then(|v| v.strip_prefix("Bearer "))
             .unwrap_or("");
         if !constant_time_eq(provided.as_bytes(), expected_key.as_bytes()) {
-            return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({
-                "error": {
-                    "message": "Invalid or missing API key. Use Authorization: Bearer <key>",
-                    "type": "authentication_error",
-                    "code": "401"
-                }
-            }))).into_response();
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": "Invalid or missing API key. Use Authorization: Bearer <key>",
+                        "type": "authentication_error",
+                        "code": "401"
+                    }
+                })),
+            )
+                .into_response();
         }
     }
     next.run(request).await
@@ -182,22 +189,17 @@ fn build_prompt(messages: &[ChatMessage], tools: &Option<Vec<OpenAITool>>) -> St
     if let Some(t_vec) = tools {
         let tools_json = serde_json::to_string_pretty(t_vec).unwrap_or_else(|_| "[]".into());
         let sys_msg = format!(
-            "You have access to the following tools. To use a tool, output exactly this JSON syntax:\n```json\n{{\"name\": \"tool_name\", \"arguments\": {{\"arg_name\": \"arg_value\"}}}}\n```\nAvailable tools schema:\n{}",
+            "You have access to the following tools. To use a tool, output exactly this JSON \
+             syntax:\n```json\n{{\"name\": \"tool_name\", \"arguments\": {{\"arg_name\": \
+             \"arg_value\"}}}}\n```\nAvailable tools schema:\n{}",
             tools_json
         );
         prompt.push_str(&format!("<start_of_turn>model\n{}<end_of_turn>\n", sys_msg));
     }
 
     for msg in messages {
-        let role = if msg.role == "assistant" {
-            "model"
-        } else {
-            &msg.role
-        };
-        prompt.push_str(&format!(
-            "<start_of_turn>{}\n{}<end_of_turn>\n",
-            role, msg.content
-        ));
+        let role = if msg.role == "assistant" { "model" } else { &msg.role };
+        prompt.push_str(&format!("<start_of_turn>{}\n{}<end_of_turn>\n", role, msg.content));
     }
     prompt.push_str("<start_of_turn>model\n");
     prompt
@@ -217,9 +219,7 @@ struct ApiInterceptor {
 impl ApiInterceptor {
     /// Initializes a new, empty API interceptor.
     fn new() -> Self {
-        Self {
-            buffer: String::new(),
-        }
+        Self { buffer: String::new() }
     }
 
     /// Checks if the current buffer ends with a partial tool tag prefix, preventing premature flushing.
@@ -248,9 +248,11 @@ impl ApiInterceptor {
                         let content = self.buffer[..start_idx].to_string();
                         chunks.push(ApiChunk::Content(content));
                     }
-                    
+
                     let end_idx = start_idx + tag_start.len() + end_offset + tag_end.len();
-                    let payload = crate::interceptor::ToolInterceptor::extract_json_payload(&self.buffer[..end_idx]);
+                    let payload = crate::interceptor::ToolInterceptor::extract_json_payload(
+                        &self.buffer[..end_idx],
+                    );
                     if let Some(p) = payload {
                         chunks.push(ApiChunk::ToolCall(p.name, p.arguments));
                     } else {
@@ -314,9 +316,7 @@ fn spawn_agent_thread(state: AppState, prompt: String, tx: mpsc::UnboundedSender
             }
         });
 
-        let _ = state
-            .agent
-            .process_stream(&state.backend, &prompt, &state.config, std_tx);
+        let _ = state.agent.process_stream(&state.backend, &prompt, &state.config, std_tx);
     });
 }
 
@@ -350,7 +350,11 @@ const ROLE_ASSISTANT: &str = "assistant";
 const TOOL_CALL_TYPE: &str = "function";
 
 /// Constructs an OpenAI-compatible error response.
-fn error_response(status: StatusCode, error_type: &str, message: &str) -> (StatusCode, Json<OpenAIErrorResponse>) {
+fn error_response(
+    status: StatusCode,
+    error_type: &str,
+    message: &str,
+) -> (StatusCode, Json<OpenAIErrorResponse>) {
     (
         status,
         Json(OpenAIErrorResponse {
@@ -380,15 +384,13 @@ async fn chat_completions(
                 StatusCode::BAD_REQUEST,
                 "invalid_request_error",
                 "The request body is not valid JSON or does not match the expected schema.",
-            ).into_response();
+            )
+            .into_response();
         }
     };
 
     let chat_id = format!("chatcmpl-{}", Uuid::new_v4());
-    let created = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let created = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
 
     tracing::info!("Received request for model {}", req.model);
     let (tx, rx) = mpsc::unbounded_channel();
@@ -405,7 +407,13 @@ async fn chat_completions(
 }
 
 /// Formats a single ApiChunk into a streaming SSE Event.
-fn format_sse_chunk(chunk: ApiChunk, model_name: &str, tool_id: &mut usize, chat_id: &str, created: u64) -> Event {
+fn format_sse_chunk(
+    chunk: ApiChunk,
+    model_name: &str,
+    tool_id: &mut usize,
+    chat_id: &str,
+    created: u64,
+) -> Event {
     let mut delta = ChatChunkDelta { content: None, tool_calls: None };
 
     match chunk {
@@ -443,7 +451,8 @@ fn handle_streaming_response(
         Ok::<_, Infallible>(format_sse_chunk(chunk, &model_name, &mut tool_id, &chat_id, created))
     });
 
-    let done_stream = tokio_stream::iter(vec![Ok::<_, Infallible>(Event::default().data("[DONE]"))]);
+    let done_stream =
+        tokio_stream::iter(vec![Ok::<_, Infallible>(Event::default().data("[DONE]"))]);
     Sse::new(stream.chain(done_stream))
 }
 
@@ -477,10 +486,20 @@ async fn handle_sync_response(
 }
 
 /// Constructs the final JSON block for a sync response.
-fn build_sync_json_payload(model: String, content: String, calls: Vec<serde_json::Value>, chat_id: String, created: u64) -> serde_json::Value {
+fn build_sync_json_payload(
+    model: String,
+    content: String,
+    calls: Vec<serde_json::Value>,
+    chat_id: String,
+    created: u64,
+) -> serde_json::Value {
     let mut msg = serde_json::json!({ "role": ROLE_ASSISTANT });
-    if !content.is_empty() { msg["content"] = serde_json::Value::String(content); }
-    if !calls.is_empty() { msg["tool_calls"] = serde_json::Value::Array(calls); }
+    if !content.is_empty() {
+        msg["content"] = serde_json::Value::String(content);
+    }
+    if !calls.is_empty() {
+        msg["tool_calls"] = serde_json::Value::Array(calls);
+    }
 
     serde_json::json!({
         "id": chat_id,
@@ -515,8 +534,7 @@ mod tests {
         let chunks = interceptor.push("```js");
         assert!(chunks.is_empty()); // Buffered, waiting
 
-        let chunks =
-            interceptor.push("on\n{\"name\": \"rg\", \"arguments\": [\"a\"]}\n```");
+        let chunks = interceptor.push("on\n{\"name\": \"rg\", \"arguments\": [\"a\"]}\n```");
         assert_eq!(chunks.len(), 1);
         if let ApiChunk::ToolCall(name, args) = &chunks[0] {
             assert_eq!(name, "rg");
@@ -530,7 +548,8 @@ mod tests {
     #[test]
     fn test_api_interceptor_mixed() {
         let mut interceptor = ApiInterceptor::new();
-        let chunks = interceptor.push("Okay! Let me search. ```json\n{\"name\": \"rg\", \"arguments\": [\"a\"]}\n```");
+        let chunks = interceptor
+            .push("Okay! Let me search. ```json\n{\"name\": \"rg\", \"arguments\": [\"a\"]}\n```");
 
         // Wait, because we sent it all at once, the loop should extract BOTH the content before and the tool call.
         assert_eq!(chunks.len(), 2);
@@ -567,9 +586,7 @@ mod tests {
     #[test]
     fn test_build_prompt_formats_messages() {
         use crate::server::{ChatMessage, build_prompt};
-        let msgs = vec![
-            ChatMessage { role: "user".into(), content: "hello".into() },
-        ];
+        let msgs = vec![ChatMessage { role: "user".into(), content: "hello".into() }];
         let prompt = build_prompt(&msgs, &None);
         assert!(prompt.contains("hello"));
         assert!(prompt.contains("user"));
@@ -578,9 +595,7 @@ mod tests {
     #[test]
     fn test_build_prompt_includes_tools() {
         use crate::server::{ChatMessage, build_prompt};
-        let msgs = vec![
-            ChatMessage { role: "user".into(), content: "test".into() },
-        ];
+        let msgs = vec![ChatMessage { role: "user".into(), content: "test".into() }];
         let tools = Some(vec![crate::server::OpenAITool {
             tool_type: "function".into(),
             function: crate::server::OpenAIFunction {

@@ -57,21 +57,33 @@ impl CanonicalModel {
     pub fn chat_template(&self) -> ChatTemplate {
         match self {
             Self::Qwen25Coder7B => ChatTemplate {
-                prompt: "<|im_start|>system\n{system}\nAvailable tools: {tools}\n<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
-                tool_result_wrapper: "<|im_end|>\n<|im_start|>user\n[Tool '{name}' executed]\n{output}\n<|im_end|>\n<|im_start|>assistant\n",
+                prompt: "<|im_start|>system\n{system}\nAvailable tools: \
+                         {tools}\n<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\\
+                         n<|im_start|>assistant\n",
+                tool_result_wrapper: "<|im_end|>\n<|im_start|>user\n[Tool '{name}' \
+                                      executed]\n{output}\n<|im_end|>\n<|im_start|>assistant\n",
                 tool_call_marker: "```json",
                 eog_text: "<|im_end|>",
             },
             Self::Gemma4_12B => ChatTemplate {
                 // Separate system instructions from user problem to prevent echoing
-                prompt: "<start_of_turn>user\n{system}\n\nAvailable tools: {tools}\n<end_of_turn>\n<start_of_turn>model\nI'll investigate and fix the issue.<end_of_turn>\n<start_of_turn>user\n{user}\n\nProvide your fix at the end.\n<end_of_turn>\n<start_of_turn>model\n<|channel>thought\n<channel|>",
-                tool_result_wrapper: "<end_of_turn>\n<start_of_turn>user\n[Tool '{name}' executed]\n{output}\n<end_of_turn>\n<start_of_turn>model\n<|channel>thought\n<channel|>",
+                prompt: "<start_of_turn>user\n{system}\n\nAvailable tools: \
+                         {tools}\n<end_of_turn>\n<start_of_turn>model\nI'll investigate and fix \
+                         the issue.<end_of_turn>\n<start_of_turn>user\n{user}\n\nProvide your fix \
+                         at the end.\n<end_of_turn>\n<start_of_turn>model\n<|channel>thought\\
+                         n<channel|>",
+                tool_result_wrapper: "<end_of_turn>\n<start_of_turn>user\n[Tool '{name}' \
+                                      executed]\n{output}\n<end_of_turn>\n<start_of_turn>model\\
+                                      n<|channel>thought\n<channel|>",
                 tool_call_marker: "```json",
                 eog_text: "<end_of_turn>",
             },
             Self::Unknown(_) => ChatTemplate {
-                prompt: "<|im_start|>system\n{system}\nAvailable tools: {tools}\n<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
-                tool_result_wrapper: "<|im_end|>\n<|im_start|>user\n[Tool '{name}' executed]\n{output}\n<|im_end|>\n<|im_start|>assistant\n",
+                prompt: "<|im_start|>system\n{system}\nAvailable tools: \
+                         {tools}\n<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\\
+                         n<|im_start|>assistant\n",
+                tool_result_wrapper: "<|im_end|>\n<|im_start|>user\n[Tool '{name}' \
+                                      executed]\n{output}\n<|im_end|>\n<|im_start|>assistant\n",
                 tool_call_marker: "```json",
                 eog_text: "<|im_end|>",
             },
@@ -92,31 +104,36 @@ impl CanonicalModel {
 /// Formats a prompt using the model's chat template.
 pub fn format_prompt(model: &CanonicalModel, system: &str, tools: &str, user: &str) -> String {
     let t = model.chat_template();
-    t.prompt
-        .replace("{system}", system)
-        .replace("{tools}", tools)
-        .replace("{user}", user)
+    t.prompt.replace("{system}", system).replace("{tools}", tools).replace("{user}", user)
 }
 
 /// Formats a tool result for injection as a user turn.
 pub fn format_tool_result(model: &CanonicalModel, name: &str, output: &str) -> String {
-    model.chat_template()
-        .tool_result_wrapper
-        .replace("{name}", name)
-        .replace("{output}", output)
+    model.chat_template().tool_result_wrapper.replace("{name}", name).replace("{output}", output)
 }
 
 /// Formats a tool nudge for injection as a user turn when the model loops.
 pub fn format_tool_nudge(model: &CanonicalModel, name: &str, output: &str) -> String {
     let base = format_tool_result(model, name, output);
-    let note = format!("\n[Note: you already ran '{}' with the same arguments. The result is unchanged. Try a different approach or produce your edit.]\n", name);
-    base.replace(&format!("[Tool '{}' executed]\n", name), &format!("[Tool '{}' executed]\n{}", name, note))
+    let note = format!(
+        "\n[Note: you already ran '{}' with the same arguments. The result is unchanged. Try a \
+         different approach or produce your edit.]\n",
+        name
+    );
+    base.replace(
+        &format!("[Tool '{}' executed]\n", name),
+        &format!("[Tool '{}' executed]\n{}", name, note),
+    )
 }
 
 /// Formats a tool rejection message for injection as a user turn when the model exceeds the tool limit.
 pub fn format_tool_rejection(model: &CanonicalModel) -> String {
     let base = format_tool_result(model, "REJECTED", "");
-    base.replace("[Tool 'REJECTED' executed]\n", "Tools disabled. You MUST provide the final patch using the <edit> tags immediately. Do not use any more tools.\n")
+    base.replace(
+        "[Tool 'REJECTED' executed]\n",
+        "Tools disabled. You MUST provide the final patch using the <edit> tags immediately. Do \
+         not use any more tools.\n",
+    )
 }
 
 /// Formats a system nudge message for injection as a user turn.
@@ -146,9 +163,7 @@ pub fn create_context<'a>(
     n_seq_max: u32,
 ) -> Result<LlamaContext<'a>> {
     let params = engine::optimized_ctx_params(ctx_size, n_seq_max);
-    let ctx = model
-        .new_context(backend, params)
-        .with_context(|| "Failed to create context")?;
+    let ctx = model.new_context(backend, params).with_context(|| "Failed to create context")?;
     Ok(ctx)
 }
 
@@ -165,10 +180,18 @@ mod tests {
 
     #[test]
     fn test_canonical_model_detection() {
-        assert_eq!(CanonicalModel::from_path("/path/to/gemma-12b.gguf"), CanonicalModel::Gemma4_12B);
-        assert_eq!(CanonicalModel::from_path("/path/to/qwen2.5-coder-7b.gguf"), CanonicalModel::Qwen25Coder7B);
-        assert_eq!(CanonicalModel::from_path("/path/to/llama-3-8b.gguf"),
-                   CanonicalModel::Unknown("/path/to/llama-3-8b.gguf".to_string()));
+        assert_eq!(
+            CanonicalModel::from_path("/path/to/gemma-12b.gguf"),
+            CanonicalModel::Gemma4_12B
+        );
+        assert_eq!(
+            CanonicalModel::from_path("/path/to/qwen2.5-coder-7b.gguf"),
+            CanonicalModel::Qwen25Coder7B
+        );
+        assert_eq!(
+            CanonicalModel::from_path("/path/to/llama-3-8b.gguf"),
+            CanonicalModel::Unknown("/path/to/llama-3-8b.gguf".to_string())
+        );
     }
 
     #[test]
@@ -195,7 +218,8 @@ mod tests {
 
     #[test]
     fn test_format_tool_result() {
-        let result = format_tool_result(&CanonicalModel::Qwen25Coder7B, "rg", ".shimmer_tool_1.txt");
+        let result =
+            format_tool_result(&CanonicalModel::Qwen25Coder7B, "rg", ".shimmer_tool_1.txt");
         assert!(result.contains("rg"));
         assert!(result.contains(".shimmer_tool_1.txt"));
     }

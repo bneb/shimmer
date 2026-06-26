@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use shimmer::interceptor::ToolInterceptor;
 use shimmer::tool;
 
@@ -31,7 +31,8 @@ fn bench_execute_tool_echo(c: &mut Criterion) {
 }
 
 fn bench_xml_edit_parsing(c: &mut Criterion) {
-    let edit = "<edit file=\"src/main.rs\">\n<search>\nfn main() {\n</search>\n<replace>\nfn main() -> Result<()> {\n</replace>\n</edit>";
+    let edit = "<edit file=\"src/main.rs\">\n<search>\nfn main() {\n</search>\n<replace>\nfn \
+                main() -> Result<()> {\n</replace>\n</edit>";
     c.bench_function("xml_edit_parsing", |b| {
         b.iter(|| {
             let mut interceptor = ToolInterceptor::new(false, true);

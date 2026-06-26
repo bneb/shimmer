@@ -26,7 +26,9 @@ pub(crate) fn check_blind_edit(
         interceptor.detected_full_edit.take();
         let msg = crate::models::format_system_nudge(
             model_type,
-            "You produced an `<edit>` block without using any tools to investigate the codebase first. Please use tools like `rg`, `ls`, or `cat` to verify the file path and content before making any edits.",
+            "You produced an `<edit>` block without using any tools to investigate the codebase \
+             first. Please use tools like `rg`, `ls`, or `cat` to verify the file path and \
+             content before making any edits.",
         );
         interceptor.reset_edit_state();
         Some(msg)
@@ -52,7 +54,8 @@ pub(crate) fn check_tdd_enforcement(
         interceptor.detected_full_edit.take();
         let msg = crate::models::format_system_nudge(
             model_type,
-            "You produced an `<edit>` block but haven't run tests yet. Please use the 'run_test' tool first.",
+            "You produced an `<edit>` block but haven't run tests yet. Please use the 'run_test' \
+             tool first.",
         );
         interceptor.reset_edit_state();
         Some(msg)
@@ -81,7 +84,8 @@ pub(crate) fn check_path_blocker(
             crate::models::format_system_nudge(
                 model_type,
                 &format!(
-                    "File '{}' does not exist. If you meant to create it, use the `run_command` tool to create it. Otherwise, verify the path using `ls` or `find`.",
+                    "File '{}' does not exist. If you meant to create it, use the `run_command` \
+                     tool to create it. Otherwise, verify the path using `ls` or `find`.",
                     path
                 ),
             )
@@ -121,11 +125,13 @@ pub(crate) fn check_search_verifier(
 
         let stale_retry = !state.edit_history.insert(search_hash);
         let hint = format!(
-            "Use `cat {}` to read the actual file content, then copy the exact lines into your `<search>` block.",
+            "Use `cat {}` to read the actual file content, then copy the exact lines into your \
+             `<search>` block.",
             path
         );
         let stale_note = if stale_retry {
-            " You already tried this exact search — it will not work. Read the file instead of guessing. "
+            " You already tried this exact search — it will not work. Read the file instead of \
+             guessing. "
         } else {
             ""
         };
@@ -136,7 +142,8 @@ pub(crate) fn check_search_verifier(
                 crate::models::format_system_nudge(
                     model_type,
                     &format!(
-                        "The code in your `<search>` block was not found in {path}. {stale_note}{hint}",
+                        "The code in your `<search>` block was not found in {path}. \
+                         {stale_note}{hint}",
                         path = path,
                         stale_note = stale_note,
                         hint = hint
@@ -149,7 +156,8 @@ pub(crate) fn check_search_verifier(
                 crate::models::format_system_nudge(
                     model_type,
                     &format!(
-                        "Your `<search>` block matched {matches} times in {path}. Include more surrounding context to make it unique. {hint}",
+                        "Your `<search>` block matched {matches} times in {path}. Include more \
+                         surrounding context to make it unique. {hint}",
                         matches = matches,
                         path = path,
                         hint = hint
@@ -214,7 +222,8 @@ pub(crate) fn check_syntax_checker(
             let err_msg = crate::models::format_system_nudge(
                 model_type,
                 &format!(
-                    "The patch you provided has syntax errors and failed AST compilation. Please fix the errors:\n\n{}",
+                    "The patch you provided has syntax errors and failed AST compilation. Please \
+                     fix the errors:\n\n{}",
                     cleaned_stderr
                 ),
             );
@@ -250,9 +259,7 @@ pub(crate) fn check_insanity_detector(
     model_type: &CanonicalModel,
 ) -> Result<Option<String>, anyhow::Error> {
     let call_key = format!("{}:{:?}", name, args);
-    if config.enable_insanity_detector
-        && !state.tool_history.insert(call_key)
-        && name != "run_test"
+    if config.enable_insanity_detector && !state.tool_history.insert(call_key) && name != "run_test"
     {
         if state.tool_calls >= STUBBORN_ABORT_LIMIT && name != "run_test" {
             return Err(anyhow::anyhow!(

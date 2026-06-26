@@ -3,9 +3,11 @@
 //! Evaluates incoming token streams for tool trigger sequences without blocking
 //! the primary Metal generation graph.
 
-use crate::tool;
-use serde::Deserialize;
 use std::process::Child;
+
+use serde::Deserialize;
+
+use crate::tool;
 
 /// Upper bound byte length for the interceptor buffer.
 const MAX_BUFFER_LEN: usize = 4096;
@@ -73,42 +75,49 @@ impl ToolInterceptor {
         self.buffer.push_str(token_str);
 
         if self.detected_edit_path.is_none()
-            && let Some(start) = self.buffer.find("<edit file=\"") {
-                let rest = &self.buffer[start + 12..];
-                if let Some(end) = rest.find("\">") {
-                    self.detected_edit_path = Some(rest[..end].to_string());
-                }
+            && let Some(start) = self.buffer.find("<edit file=\"")
+        {
+            let rest = &self.buffer[start + 12..];
+            if let Some(end) = rest.find("\">") {
+                self.detected_edit_path = Some(rest[..end].to_string());
             }
+        }
 
         if self.detected_search_block.is_none()
             && let Some(ref path) = self.detected_edit_path
-                && let Some(s_start) = self.buffer.find("<search>") {
-                    let s_rest = &self.buffer[s_start + 8..];
-                    if let Some(s_end) = s_rest.find("</search>") {
-                        self.detected_search_block = Some((path.clone(), s_rest[..s_end].to_string()));
-                    }
-                }
+            && let Some(s_start) = self.buffer.find("<search>")
+        {
+            let s_rest = &self.buffer[s_start + 8..];
+            if let Some(s_end) = s_rest.find("</search>") {
+                self.detected_search_block = Some((path.clone(), s_rest[..s_end].to_string()));
+            }
+        }
 
         if self.detected_full_edit.is_none()
             && let Some((ref path, ref search)) = self.detected_search_block
-                && let Some(r_start) = self.buffer.find("<replace>") {
-                    let r_rest = &self.buffer[r_start + 9..];
-                    if let Some(r_end) = r_rest.find("</replace>")
-                        && self.buffer[r_start + 9 + r_end..].contains("</edit>") {
-                            self.detected_full_edit = Some((path.clone(), search.clone(), r_rest[..r_end].to_string()));
-                        }
-                }
+            && let Some(r_start) = self.buffer.find("<replace>")
+        {
+            let r_rest = &self.buffer[r_start + 9..];
+            if let Some(r_end) = r_rest.find("</replace>")
+                && self.buffer[r_start + 9 + r_end..].contains("</edit>")
+            {
+                self.detected_full_edit =
+                    Some((path.clone(), search.clone(), r_rest[..r_end].to_string()));
+            }
+        }
 
         // Detect ANY edit block closure (with or without <replace>).
         // This catches incomplete edits that the full_edit detector misses.
         if !self.edit_tag_closed
             && self.detected_edit_path.is_some()
-            && self.buffer.contains("</edit>") {
-                self.edit_tag_closed = true;
-            }
+            && self.buffer.contains("</edit>")
+        {
+            self.edit_tag_closed = true;
+        }
 
         if self.detect_json_tools
-            && let Some(start) = self.buffer.find(TOOL_MARKER_START) {
+            && let Some(start) = self.buffer.find(TOOL_MARKER_START)
+        {
             let rest = &self.buffer[start + TOOL_MARKER_START.len()..];
             if rest.contains(TOOL_MARKER_END) {
                 return self.process_full_call();
@@ -171,9 +180,10 @@ impl ToolInterceptor {
 
         if self.spec_task.is_none() {
             if self.buffer.contains(TOOL_MARKER_START)
-                && let Some(payload) = Self::extract_json_payload(&self.buffer) {
-                    self.try_spawn_speculative(payload);
-                }
+                && let Some(payload) = Self::extract_json_payload(&self.buffer)
+            {
+                self.try_spawn_speculative(payload);
+            }
         } else if Self::has_diverged(&self.buffer) {
             self.kill_speculative_task();
             self.buffer.clear();
@@ -182,18 +192,20 @@ impl ToolInterceptor {
 
     fn try_spawn_speculative(&mut self, payload: ToolCallPayload) {
         let args_vec: Vec<String> = match &payload.arguments {
-            serde_json::Value::Array(arr) => arr.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
-            serde_json::Value::Object(obj) => obj.values().filter_map(|v| v.as_str().map(String::from)).collect(),
+            serde_json::Value::Array(arr) => {
+                arr.iter().filter_map(|v| v.as_str().map(String::from)).collect()
+            }
+            serde_json::Value::Object(obj) => {
+                obj.values().filter_map(|v| v.as_str().map(String::from)).collect()
+            }
             _ => Vec::new(),
         };
         if tool::is_idempotent(&payload.name, &args_vec).unwrap_or(false)
-            && let Ok(child) = tool::spawn_tool(&payload.name, &args_vec) {
-                self.spec_task = Some(SpeculativeTask {
-                    child,
-                    tool_name: payload.name,
-                    args: payload.arguments,
-                });
-            }
+            && let Ok(child) = tool::spawn_tool(&payload.name, &args_vec)
+        {
+            self.spec_task =
+                Some(SpeculativeTask { child, tool_name: payload.name, args: payload.arguments });
+        }
     }
 
     fn handle_buffer_overflow(&mut self) {
@@ -333,12 +345,12 @@ mod tests {
         interceptor.feed_token("<edi");
         interceptor.feed_token("t file=\"foo.py\">");
         assert!(interceptor.buffer.contains("<edit "));
-        
+
         let mut interceptor2 = ToolInterceptor::new(false, true);
         interceptor2.feed_token("<ed");
         interceptor2.feed_token("it>");
         assert!(interceptor2.buffer.contains("<edit>"));
-        
+
         // Ensure it doesn't accidentally trigger on non-related <edit tags without space
         let mut interceptor3 = ToolInterceptor::new(false, true);
         interceptor3.feed_token("<editor>");
@@ -348,7 +360,8 @@ mod tests {
 
     #[test]
     fn test_extract_json_payload() {
-        let text = "```json\n{\"name\": \"cat\", \"arguments\": [\"django/db/utils.py\"]}\n```The fix";
+        let text =
+            "```json\n{\"name\": \"cat\", \"arguments\": [\"django/db/utils.py\"]}\n```The fix";
         let payload = ToolInterceptor::extract_json_payload(text);
         assert!(payload.is_some(), "Failed to parse: {:?}", text);
     }
@@ -360,9 +373,7 @@ mod tests {
 
         // Feed a JSON tool call — should NOT be detected
         assert!(!interceptor.feed_token("```json\n"));
-        assert!(!interceptor.feed_token(
-            r#"{"name": "rg", "arguments": ["pattern", "dir"]}"#
-        ));
+        assert!(!interceptor.feed_token(r#"{"name": "rg", "arguments": ["pattern", "dir"]}"#));
         assert!(!interceptor.feed_token("```"));
         assert!(interceptor.detected_call.is_none());
 

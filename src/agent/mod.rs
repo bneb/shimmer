@@ -1,15 +1,11 @@
 //! Agent execution loop — generation, tool delegation, and context management.
 
-pub mod state;
-pub mod sampling;
 pub mod compaction;
-pub mod tools;
+pub mod sampling;
+pub mod state;
 pub mod swarm;
+pub mod tools;
 pub mod validators;
-
-pub use state::{AgentConfig, AgentState, BenchmarkResult, SampleConfig, SwarmState};
-pub use state::{BATCH_SIZE, MAX_TOKENS};
-use state::{EngineState, COMPACT_THRESH, CTX_SIZE, BATCH_SEQ_ID, MAX_TOKEN_BYTES, HARD_TOOL_LIMIT, STUBBORN_ABORT_LIMIT};
 
 use anyhow::Result;
 use llama_cpp_2::{
@@ -17,6 +13,12 @@ use llama_cpp_2::{
     llama_batch::LlamaBatch,
     model::{AddBos, LlamaModel},
 };
+pub use state::{AgentConfig, AgentState, BenchmarkResult, SampleConfig, SwarmState};
+use state::{
+    BATCH_SEQ_ID, COMPACT_THRESH, CTX_SIZE, EngineState, HARD_TOOL_LIMIT, MAX_TOKEN_BYTES,
+    STUBBORN_ABORT_LIMIT,
+};
+pub use state::{BATCH_SIZE, MAX_TOKENS};
 
 use crate::compaction::{ContextManager, ZoneType};
 use crate::interceptor::ToolInterceptor;
@@ -39,27 +41,17 @@ impl Agent {
         rx: std::sync::mpsc::Receiver<crate::daemon::DaemonRequest>,
     ) -> Result<()> {
         let max_agents = 4;
-        let ctx = crate::models::create_context(backend, &self.main_model, CTX_SIZE, max_agents as u32)?;
-        let batch = llama_cpp_2::llama_batch::LlamaBatch::new(
-            (BATCH_SIZE) * max_agents,
-            max_agents as i32,
-        );
+        let ctx =
+            crate::models::create_context(backend, &self.main_model, CTX_SIZE, max_agents as u32)?;
+        let batch =
+            llama_cpp_2::llama_batch::LlamaBatch::new((BATCH_SIZE) * max_agents, max_agents as i32);
 
-        let mut state = SwarmState {
-            ctx,
-            batch,
-            agents: Vec::new(),
-        };
+        let mut state = SwarmState { ctx, batch, agents: Vec::new() };
         let mut streams: Vec<Option<std::os::unix::net::UnixStream>> = Vec::new();
         let mut interceptors: Vec<ToolInterceptor> = Vec::new();
         loop {
             let new_reqs = self.poll_daemon_requests(&state, &rx)?;
-            self.process_daemon_requests(
-                new_reqs,
-                &mut state,
-                &mut streams,
-                &mut interceptors,
-            )?;
+            self.process_daemon_requests(new_reqs, &mut state, &mut streams, &mut interceptors)?;
 
             self.enforce_swarm_compaction(&mut state)?;
             self.generate_swarm_step(&mut state)?;
@@ -112,18 +104,16 @@ impl Agent {
             let mut a = self.create_agent_state(seq_id, None, None)?;
 
             let prompt = format!(
-                "<start_of_turn>model\nYou are an AI.<end_of_turn>\n<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
+                "<start_of_turn>model\nYou are an \
+                 AI.<end_of_turn>\n<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
                 req.prompt
             );
-            let tokens = self
-                .main_model
-                .str_to_token(&prompt, llama_cpp_2::model::AddBos::Always)?;
+            let tokens =
+                self.main_model.str_to_token(&prompt, llama_cpp_2::model::AddBos::Always)?;
 
             for (j, &t) in tokens.iter().enumerate() {
                 let is_last = j == tokens.len() - 1;
-                state
-                    .batch
-                    .add(t, a.n_cur + j as i32, &[a.seq_id], is_last)?;
+                state.batch.add(t, a.n_cur + j as i32, &[a.seq_id], is_last)?;
                 a.history.push(t);
                 if is_last {
                     a.last_batch_idx = j as i32;
@@ -159,8 +149,7 @@ impl Agent {
                 if token_str.is_empty() {
                     continue;
                 }
-                let payload =
-                    serde_json::json!({ "token": token_str });
+                let payload = serde_json::json!({ "token": token_str });
                 if let Some(stream) = &mut streams[i]
                     && writeln!(stream, "{}", payload).is_err()
                 {
@@ -187,9 +176,7 @@ impl Agent {
                 let a = state.agents.remove(i);
                 streams.remove(i);
                 interceptors.remove(i);
-                let _ = state
-                    .ctx
-                    .clear_kv_cache_seq(Some(a.seq_id as u32), None, None);
+                let _ = state.ctx.clear_kv_cache_seq(Some(a.seq_id as u32), None, None);
             } else {
                 i += 1;
             }
@@ -200,10 +187,7 @@ impl Agent {
     /// Creates a new Agent instance, loading the main model from the specified path.
     pub fn new(backend: &LlamaBackend, main_path: &str) -> Result<Self> {
         let model_type = crate::models::CanonicalModel::from_path(main_path);
-        Ok(Self {
-            main_model: models::load_model(backend, main_path)?,
-            model_type,
-        })
+        Ok(Self { main_model: models::load_model(backend, main_path)?, model_type })
     }
 
     /// Processes a single query to completion and returns the generated text and metrics.
@@ -219,11 +203,7 @@ impl Agent {
 
         tracing::debug!("Processing query: {} chars", prompt.len());
 
-        self.generation_loop(
-            &mut state,
-            config,
-            None,
-        )?;
+        self.generation_loop(&mut state, config, None)?;
 
         let duration = gen_start_time.elapsed().as_secs_f64();
         tracing::debug!("Timings: {}", state.ctx.timings());
@@ -241,18 +221,12 @@ impl Agent {
         tx_out: std::sync::mpsc::Sender<String>,
     ) -> Result<()> {
         let mut state = self.init_state(backend, prompt, None, &config.sample_config)?;
-        self.generation_loop(
-            &mut state,
-            config,
-            Some(&tx_out),
-        )
+        self.generation_loop(&mut state, config, Some(&tx_out))
     }
 
     /// Determines if the model has emitted an End-Of-Generation token.
     fn check_eog(&self, emitted: &[llama_cpp_2::token::LlamaToken]) -> bool {
-        emitted
-            .last()
-            .is_some_and(|&t| self.main_model.is_eog_token(t))
+        emitted.last().is_some_and(|&t| self.main_model.is_eog_token(t))
     }
 
     /// Initializes a new engine state, creating the context and evaluating the prompt.
@@ -265,7 +239,7 @@ impl Agent {
     ) -> Result<EngineState<'a>> {
         let mut ctx = models::create_context(backend, &self.main_model, CTX_SIZE, 1)?;
         let mut batch = LlamaBatch::new(BATCH_SIZE, 1);
-        
+
         let mut compactor = ContextManager::new(CTX_SIZE as usize, COMPACT_THRESH);
         let mut history = Vec::new();
 
@@ -273,11 +247,7 @@ impl Agent {
         compactor.push_block(ZoneType::System, n_cur as usize);
 
         let sampler = if let Some(g) = grammar_str {
-            Some(llama_cpp_2::sampling::LlamaSampler::grammar(
-                &self.main_model,
-                g,
-                "root",
-            )?)
+            Some(llama_cpp_2::sampling::LlamaSampler::grammar(&self.main_model, g, "root")?)
         } else {
             None
         };
@@ -303,8 +273,6 @@ impl Agent {
             pending_tool: None,
         })
     }
-
-
 
     /// Executes a single generation step, optionally utilizing speculative decoding.
     fn generate_step(
@@ -368,7 +336,10 @@ impl Agent {
     ) -> Result<Vec<llama_cpp_2::token::LlamaToken>> {
         tracing::debug!("==> verify_draft_tokens");
         let std_out = std::io::stdout();
-        let _ = { use std::io::Write; std_out.lock().flush() };
+        let _ = {
+            use std::io::Write;
+            std_out.lock().flush()
+        };
         let verification = speculative::verify_draft_tokens(
             &mut state.ctx,
             &mut state.batch,
@@ -378,15 +349,19 @@ impl Agent {
             0,
         )?;
         tracing::debug!("<== verify_draft_tokens");
-        let _ = { use std::io::Write; std_out.lock().flush() };
+        let _ = {
+            use std::io::Write;
+            std_out.lock().flush()
+        };
 
         let draft_len = draft_branches[verification.best_branch_idx].len();
-        state
-            .adaptive_tracker
-            .update_draft(verification.accepted_count, draft_len);
+        state.adaptive_tracker.update_draft(verification.accepted_count, draft_len);
 
         tracing::debug!("==> rollback_and_correct");
-        let _ = { use std::io::Write; std_out.lock().flush() };
+        let _ = {
+            use std::io::Write;
+            std_out.lock().flush()
+        };
         state.prev_size = speculative::rollback_and_correct(
             &mut state.ctx,
             &mut state.batch,
@@ -395,7 +370,10 @@ impl Agent {
             0,
         )?;
         tracing::debug!("<== rollback_and_correct");
-        let _ = { use std::io::Write; std_out.lock().flush() };
+        let _ = {
+            use std::io::Write;
+            std_out.lock().flush()
+        };
 
         // draft_branches[...][0] is m_0, which was already emitted in the previous step.
         // The accepted draft tokens are at indices 1 to accepted_count.
@@ -433,7 +411,6 @@ impl Agent {
         Ok(tool_detected)
     }
 
-
     fn process_single_token(
         &self,
         token: llama_cpp_2::token::LlamaToken,
@@ -442,7 +419,9 @@ impl Agent {
         config: &AgentConfig,
         tx_out: Option<&std::sync::mpsc::Sender<String>>,
     ) -> Result<bool> {
-        if let Some(sampler) = &mut state.sampler { sampler.accept(token); }
+        if let Some(sampler) = &mut state.sampler {
+            sampler.accept(token);
+        }
         state.history.push(token);
         state.compactor.extend_last_block(ZoneType::History, 1);
         state.total_generated += 1;
@@ -451,44 +430,54 @@ impl Agent {
         let token_str = self.emit_token_output(token, tx_out, &mut state.pending_utf8)?;
 
         if interceptor.feed_token(&token_str)
-            && let Some((name, args, child)) = interceptor.detected_call.take() {
-                if config.execute_tools_locally {
-                    if let Some(nudge_msg) =
-                        validators::check_insanity_detector(
-                            state, config, &name, &args, &self.model_type,
-                        )?
-                    {
-                        let tokens = self.main_model.str_to_token(&nudge_msg, AddBos::Never)?;
-                        if !tokens.is_empty() {
-                            state.batch.clear();
-                            let pos = state.history.len() as i32;
-                            for (j, &t) in tokens.iter().enumerate() {
-                                let is_last = j == tokens.len() - 1;
-                                state.batch.add(t, pos + j as i32, &[0], is_last)?;
-                                state.history.push(t);
-                                let _ = self.emit_token_output(t, tx_out, &mut state.pending_utf8)?;
-                                if state.batch.n_tokens() == BATCH_SIZE as i32 || is_last {
-                                    state.ctx.decode(&mut state.batch)?;
-                                    if !is_last { state.batch.clear(); }
+            && let Some((name, args, child)) = interceptor.detected_call.take()
+        {
+            if config.execute_tools_locally {
+                if let Some(nudge_msg) = validators::check_insanity_detector(
+                    state,
+                    config,
+                    &name,
+                    &args,
+                    &self.model_type,
+                )? {
+                    let tokens = self.main_model.str_to_token(&nudge_msg, AddBos::Never)?;
+                    if !tokens.is_empty() {
+                        state.batch.clear();
+                        let pos = state.history.len() as i32;
+                        for (j, &t) in tokens.iter().enumerate() {
+                            let is_last = j == tokens.len() - 1;
+                            state.batch.add(t, pos + j as i32, &[0], is_last)?;
+                            state.history.push(t);
+                            let _ = self.emit_token_output(t, tx_out, &mut state.pending_utf8)?;
+                            if state.batch.n_tokens() == BATCH_SIZE as i32 || is_last {
+                                state.ctx.decode(&mut state.batch)?;
+                                if !is_last {
+                                    state.batch.clear();
                                 }
                             }
-                            if tx_out.is_none() { use std::io::Write; let _ = std::io::stdout().flush(); }
-                            state.compactor.extend_last_block(ZoneType::System, tokens.len());
-                            state.prev_size = state.batch.n_tokens();
-                            state.n_cur = state.history.len() as i32;
                         }
-                        return Ok(true);
+                        if tx_out.is_none() {
+                            use std::io::Write;
+                            let _ = std::io::stdout().flush();
+                        }
+                        state.compactor.extend_last_block(ZoneType::System, tokens.len());
+                        state.prev_size = state.batch.n_tokens();
+                        state.n_cur = state.history.len() as i32;
                     }
-                    // Only destructive tools reset the dedup set
-                    let is_mutating = name == "edit" || name == "run_command"
-                        || name == "replace_file_content" || name == "write_to_file";
-                    if is_mutating {
-                        state.tool_history.clear();
-                    }
-                    state.pending_tool = Some((name, args, child));
+                    return Ok(true);
                 }
-                return Ok(true);
+                // Only destructive tools reset the dedup set
+                let is_mutating = name == "edit"
+                    || name == "run_command"
+                    || name == "replace_file_content"
+                    || name == "write_to_file";
+                if is_mutating {
+                    state.tool_history.clear();
+                }
+                state.pending_tool = Some((name, args, child));
             }
+            return Ok(true);
+        }
 
         if let Some(nudge_msg) =
             validators::check_blind_edit(state, config, interceptor, &self.model_type)
@@ -505,28 +494,27 @@ impl Agent {
         }
 
         if config.enable_path_blocker
-            && let Some(nudge_msg) =
-                validators::check_path_blocker(interceptor, &self.model_type)
-            {
-                self.inject_nudge(state, &nudge_msg, tx_out)?;
-                return Ok(true);
-            }
+            && let Some(nudge_msg) = validators::check_path_blocker(interceptor, &self.model_type)
+        {
+            self.inject_nudge(state, &nudge_msg, tx_out)?;
+            return Ok(true);
+        }
 
         if config.enable_search_verifier
             && let Some(nudge_msg) =
                 validators::check_search_verifier(state, interceptor, &self.model_type)
-            {
-                self.inject_nudge(state, &nudge_msg, tx_out)?;
-                return Ok(true);
-            }
+        {
+            self.inject_nudge(state, &nudge_msg, tx_out)?;
+            return Ok(true);
+        }
 
         if config.enable_syntax_checker
             && let Some(nudge_msg) =
                 validators::check_syntax_checker(state, interceptor, &self.model_type)
-            {
-                self.inject_nudge(state, &nudge_msg, tx_out)?;
-                return Ok(true);
-            }
+        {
+            self.inject_nudge(state, &nudge_msg, tx_out)?;
+            return Ok(true);
+        }
 
         Ok(false)
     }
@@ -536,9 +524,12 @@ impl Agent {
         token: llama_cpp_2::token::LlamaToken,
         pending_utf8: &mut Vec<u8>,
     ) -> String {
-        let t_bytes = self.main_model.token_to_piece_bytes(token, MAX_TOKEN_BYTES, true, None).unwrap_or_default();
+        let t_bytes = self
+            .main_model
+            .token_to_piece_bytes(token, MAX_TOKEN_BYTES, true, None)
+            .unwrap_or_default();
         pending_utf8.extend_from_slice(&t_bytes);
-        
+
         let mut emit_str = String::new();
         loop {
             match std::str::from_utf8(pending_utf8) {
@@ -550,8 +541,10 @@ impl Agent {
                 Err(e) => {
                     let valid_len = e.valid_up_to();
                     if valid_len > 0 {
-                        emit_str.push_str(std::str::from_utf8(&pending_utf8[..valid_len])
-                        .expect("valid_up_to guarantees valid UTF-8 boundary"));
+                        emit_str.push_str(
+                            std::str::from_utf8(&pending_utf8[..valid_len])
+                                .expect("valid_up_to guarantees valid UTF-8 boundary"),
+                        );
                         pending_utf8.drain(..valid_len);
                     } else if let Some(err_len) = e.error_len() {
                         emit_str.push('\u{FFFD}');
@@ -594,10 +587,7 @@ impl Agent {
         nudge_msg: &str,
         tx_out: Option<&std::sync::mpsc::Sender<String>>,
     ) -> Result<()> {
-        let tokens = self
-            .main_model
-            .str_to_token(nudge_msg, AddBos::Never)
-            .unwrap_or_default();
+        let tokens = self.main_model.str_to_token(nudge_msg, AddBos::Never).unwrap_or_default();
         state.batch.clear();
         let pos = state.history.len() as i32;
         for (j, &t) in tokens.iter().enumerate() {
@@ -612,9 +602,7 @@ impl Agent {
                 }
             }
         }
-        state
-            .compactor
-            .extend_last_block(ZoneType::System, tokens.len());
+        state.compactor.extend_last_block(ZoneType::System, tokens.len());
         state.prev_size = state.batch.n_tokens();
         state.n_cur = state.history.len() as i32;
         Ok(())
@@ -669,7 +657,8 @@ impl Agent {
         config: &AgentConfig,
         grammar_str: Option<&str>,
     ) -> Result<()> {
-        let mut state = self.init_state(backend, system_prompt, grammar_str, &SampleConfig::default())?;
+        let mut state =
+            self.init_state(backend, system_prompt, grammar_str, &SampleConfig::default())?;
         let mut rl = rustyline::DefaultEditor::new()
             .map_err(|e| anyhow::anyhow!("Rustyline error: {}", e))?;
         self.run_repl_loop(&mut rl, &mut state, config)
@@ -716,17 +705,14 @@ impl Agent {
         config: &AgentConfig,
     ) -> Result<()> {
         let user_prompt = format!(
-            "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n<|channel>thought\n<channel|>",
+            "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n<|channel>thought\\
+             n<channel|>",
             input
         );
         let tokens = self.main_model.str_to_token(&user_prompt, AddBos::Never)?;
         self.prepare_repl_turn(state, &tokens)?;
 
-        self.generation_loop(
-            state,
-            config,
-            None,
-        )
+        self.generation_loop(state, config, None)
     }
 
     /// Prepares the batch and token history for the upcoming REPL turn.
@@ -738,9 +724,7 @@ impl Agent {
         state.batch.clear();
         for (i, &token) in tokens.iter().enumerate() {
             let is_last = i == tokens.len() - 1;
-            state
-                .batch
-                .add(token, state.n_cur + i as i32, &[BATCH_SEQ_ID], is_last)?;
+            state.batch.add(token, state.n_cur + i as i32, &[BATCH_SEQ_ID], is_last)?;
             state.history.push(token);
             if state.batch.n_tokens() == BATCH_SIZE as i32 || is_last {
                 state.ctx.decode(&mut state.batch)?;
@@ -749,9 +733,7 @@ impl Agent {
                 }
             }
         }
-        state
-            .compactor
-            .extend_last_block(ZoneType::History, tokens.len());
+        state.compactor.extend_last_block(ZoneType::History, tokens.len());
         state.ctx.decode(&mut state.batch)?;
         state.prev_size = state.batch.n_tokens();
         state.n_cur += tokens.len() as i32;
@@ -785,7 +767,9 @@ impl Agent {
                 // Execute any pending tool immediately, appending result as a user turn
                 if let Some((name, args, child)) = state.pending_tool.take() {
                     if state.tool_calls >= STUBBORN_ABORT_LIMIT && name != "run_test" {
-                        return Err(anyhow::anyhow!("Model is stuck in a loop and refusing to yield a patch. Aborting."));
+                        return Err(anyhow::anyhow!(
+                            "Model is stuck in a loop and refusing to yield a patch. Aborting."
+                        ));
                     }
                     if state.tool_calls >= HARD_TOOL_LIMIT && name != "run_test" {
                         // Hard cut: reject further tools, force edit now
@@ -804,10 +788,15 @@ impl Agent {
                             let _ = self.emit_token_output(t, tx_out, &mut state.pending_utf8)?;
                             if state.batch.n_tokens() == BATCH_SIZE as i32 || is_last {
                                 state.ctx.decode(&mut state.batch)?;
-                                if !is_last { state.batch.clear(); }
+                                if !is_last {
+                                    state.batch.clear();
+                                }
                             }
                         }
-                        if tx_out.is_none() { use std::io::Write; let _ = std::io::stdout().flush(); }
+                        if tx_out.is_none() {
+                            use std::io::Write;
+                            let _ = std::io::stdout().flush();
+                        }
                         state.compactor.extend_last_block(ZoneType::System, tokens.len());
                         state.prev_size = state.batch.n_tokens();
                         state.n_cur = state.history.len() as i32;
@@ -834,7 +823,8 @@ impl Agent {
                     state.last_output_token_count,
                     state.tool_calls,
                 ) {
-                    let tokens = self.main_model.str_to_token(&prompt, llama_cpp_2::model::AddBos::Never)?;
+                    let tokens =
+                        self.main_model.str_to_token(&prompt, llama_cpp_2::model::AddBos::Never)?;
                     state.batch.clear();
                     let pos = state.history.len() as i32;
                     for (j, &t) in tokens.iter().enumerate() {
@@ -844,11 +834,18 @@ impl Agent {
                         let _ = self.emit_token_output(t, tx_out, &mut state.pending_utf8)?;
                         if state.batch.n_tokens() == BATCH_SIZE as i32 || is_last {
                             state.ctx.decode(&mut state.batch)?;
-                            if !is_last { state.batch.clear(); }
+                            if !is_last {
+                                state.batch.clear();
+                            }
                         }
                     }
-                    if tx_out.is_none() { use std::io::Write; let _ = std::io::stdout().flush(); }
-                    state.compactor.extend_last_block(crate::compaction::ZoneType::History, tokens.len());
+                    if tx_out.is_none() {
+                        use std::io::Write;
+                        let _ = std::io::stdout().flush();
+                    }
+                    state
+                        .compactor
+                        .extend_last_block(crate::compaction::ZoneType::History, tokens.len());
                     state.prev_size = state.batch.n_tokens();
                     state.n_cur = state.history.len() as i32;
                     continue;
@@ -858,9 +855,7 @@ impl Agent {
         }
         Ok(())
     }
-
 }
-
 
 /// Swarm-specific implementation methods for the Agent.
 
@@ -877,7 +872,8 @@ mod tests {
 
     #[test]
     fn test_extract_high_entropy_summary_preserves_errors() {
-        let input = "line 1\n  File \"/src/foo.py\", line 42, in bar\n    raise ValueError('bad')\nValueError: bad\nline 5";
+        let input = "line 1\n  File \"/src/foo.py\", line 42, in bar\n    raise \
+                     ValueError('bad')\nValueError: bad\nline 5";
         let out = Agent::extract_high_entropy_summary(input);
         assert!(out.contains("ValueError"));
         assert!(out.contains("foo.py"));
@@ -900,63 +896,148 @@ mod tests {
     #[test]
     fn test_should_continue_swe_bench_no_swe_bench() {
         let history = "Just a normal conversation with an <edit file=\"foo.txt\"> tag.";
-        assert_eq!(Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, history, 0, 10, 0), None);
+        assert_eq!(
+            Agent::should_continue_swe_bench(
+                &crate::models::CanonicalModel::Qwen25Coder7B,
+                history,
+                0,
+                10,
+                0
+            ),
+            None
+        );
     }
 
     #[test]
     fn test_should_continue_swe_bench_unclosed_tag() {
-        let history = format!("{}
+        let history = format!(
+            "{}
 <edit file=\"foo.txt\">
 Some code...
 Let me make another fix:
-        <edit file=\"bar.txt\">", sys_prompt());
-        assert!(Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 0, 10, 0).unwrap().contains("closing </edit> tag"));
+        <edit file=\"bar.txt\">",
+            sys_prompt()
+        );
+        assert!(
+            Agent::should_continue_swe_bench(
+                &crate::models::CanonicalModel::Qwen25Coder7B,
+                &history,
+                0,
+                10,
+                0
+            )
+            .unwrap()
+            .contains("closing </edit> tag")
+        );
     }
 
     #[test]
     fn test_should_continue_swe_bench_missing_edit() {
-        let history = format!("{}
-        I have found the problem. The issue is in bar.py.", sys_prompt());
+        let history = format!(
+            "{}
+        I have found the problem. The issue is in bar.py.",
+            sys_prompt()
+        );
         // Phase 1: early investigation — encourages search
-        let prompt = Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 0, 10, 0).unwrap();
+        let prompt = Agent::should_continue_swe_bench(
+            &crate::models::CanonicalModel::Qwen25Coder7B,
+            &history,
+            0,
+            10,
+            0,
+        )
+        .unwrap();
         assert!(prompt.contains("Investigate using tools"));
     }
 
     /// Phase 2: after 6+ tool calls with no edit, force convergence.
     #[test]
     fn test_should_continue_swe_bench_force_convergence() {
-        let history = format!("{}
-I have found the problem.", sys_prompt());
-        let prompt = Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 0, 10, 6).unwrap();
+        let history = format!(
+            "{}
+I have found the problem.",
+            sys_prompt()
+        );
+        let prompt = Agent::should_continue_swe_bench(
+            &crate::models::CanonicalModel::Qwen25Coder7B,
+            &history,
+            0,
+            10,
+            6,
+        )
+        .unwrap();
         assert!(prompt.contains("Provide your fix now"));
     }
 
     #[test]
     fn test_should_continue_swe_bench_completed_edit() {
-        let history = format!("{}
+        let history = format!(
+            "{}
 <edit file=\"foo.txt\">
         Some code...
 </edit>
-All done!", sys_prompt());
-        assert_eq!(Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 0, 10, 0), None);
+All done!",
+            sys_prompt()
+        );
+        assert_eq!(
+            Agent::should_continue_swe_bench(
+                &crate::models::CanonicalModel::Qwen25Coder7B,
+                &history,
+                0,
+                10,
+                0
+            ),
+            None
+        );
     }
 
     #[test]
     fn test_should_continue_swe_bench_empty_response() {
-        let history = format!("{}
+        let history = format!(
+            "{}
 <|im_start|>assistant
-<|im_end|>", sys_prompt());
-        let prompt = Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 0, 0, 0).unwrap();
+<|im_end|>",
+            sys_prompt()
+        );
+        let prompt = Agent::should_continue_swe_bench(
+            &crate::models::CanonicalModel::Qwen25Coder7B,
+            &history,
+            0,
+            0,
+            0,
+        )
+        .unwrap();
         assert!(prompt.contains("empty or incorrectly formatted"));
     }
 
     #[test]
     fn test_should_continue_swe_bench_anti_spiral_cap() {
-        let history = format!("{}
-I have found the problem.", sys_prompt());
+        let history = format!(
+            "{}
+I have found the problem.",
+            sys_prompt()
+        );
         // At continuation count 10, should return None (hard stop)
-        assert_eq!(Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 10, 10, 0), None);
+        assert_eq!(
+            Agent::should_continue_swe_bench(
+                &crate::models::CanonicalModel::Qwen25Coder7B,
+                &history,
+                10,
+                10,
+                0
+            ),
+            None
+        );
         // At continuation count 9, should still trigger
-        assert!(Agent::should_continue_swe_bench(&crate::models::CanonicalModel::Qwen25Coder7B, &history, 9, 10, 0).is_some());
+        assert!(
+            Agent::should_continue_swe_bench(
+                &crate::models::CanonicalModel::Qwen25Coder7B,
+                &history,
+                9,
+                10,
+                0
+            )
+            .is_some()
+        );
     }
 }

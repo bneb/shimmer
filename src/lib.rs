@@ -15,11 +15,11 @@ pub mod engine;
 pub mod interceptor;
 /// Definitions and implementations for ML model backends.
 pub mod models;
+/// Heuristic prompt context search.
+pub mod preprocessor;
 /// HTTP API server.
 pub mod server;
 /// Speculative decoding and drafting heuristics.
 pub mod speculative;
 /// Tool execution subsystem and environment abstractions.
 pub mod tool;
-/// Heuristic prompt context search.
-pub mod preprocessor;

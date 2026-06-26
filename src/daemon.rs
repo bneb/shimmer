@@ -3,12 +3,14 @@
 //! Handles background execution via a Unix domain socket, allowing the
 //! agent swarm to process generation requests as a system service.
 
-use crate::agent::{Agent, AgentConfig};
-use llama_cpp_2::llama_backend::LlamaBackend;
 use std::io::{BufRead, BufReader};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::Arc;
 use std::sync::mpsc;
+
+use llama_cpp_2::llama_backend::LlamaBackend;
+
+use crate::agent::{Agent, AgentConfig};
 
 /// Resolves the Unix domain socket path, checking:
 /// 1. `SHIMMER_SOCKET` environment variable
@@ -86,8 +88,9 @@ fn handle_client(stream: UnixStream, tx: mpsc::Sender<DaemonRequest>) -> anyhow:
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Write;
+
+    use super::*;
 
     #[test]
     fn test_handle_client_valid_json() {

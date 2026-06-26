@@ -3,11 +3,12 @@
 //! Handles tool dispatch, output capture, and injecting results as user turns
 //! without KV cache rollback (append semantics).
 
-use super::state::{EngineState, BATCH_SIZE};
-use crate::compaction::ZoneType;
-use crate::tool;
 use anyhow::Result;
 use llama_cpp_2::model::AddBos;
+
+use super::state::{BATCH_SIZE, EngineState};
+use crate::compaction::ZoneType;
+use crate::tool;
 
 impl super::Agent {
     /// Executes a pending tool and appends the result as a user turn.
@@ -29,12 +30,19 @@ impl super::Agent {
             tool::process_tool_child(child)
         } else {
             let args_vec: Vec<String> = match &tgt {
-                serde_json::Value::Array(arr) => arr.iter().filter_map(|v| {
-                    if let Some(s) = v.as_str() { Some(String::from(s)) }
-                    else { v.as_number().map(|n| n.to_string()) }
-                }).collect(),
-                serde_json::Value::Object(obj) => obj.values()
-                    .filter_map(|v| v.as_str().map(String::from)).collect(),
+                serde_json::Value::Array(arr) => arr
+                    .iter()
+                    .filter_map(|v| {
+                        if let Some(s) = v.as_str() {
+                            Some(String::from(s))
+                        } else {
+                            v.as_number().map(|n| n.to_string())
+                        }
+                    })
+                    .collect(),
+                serde_json::Value::Object(obj) => {
+                    obj.values().filter_map(|v| v.as_str().map(String::from)).collect()
+                }
                 _ => Vec::new(),
             };
             tool::execute_tool(&pat, &args_vec)
@@ -54,10 +62,15 @@ impl super::Agent {
             let _ = self.emit_token_output(t, tx_out, &mut state.pending_utf8)?;
             if state.batch.n_tokens() == BATCH_SIZE as i32 || is_last {
                 state.ctx.decode(&mut state.batch)?;
-                if !is_last { state.batch.clear(); }
+                if !is_last {
+                    state.batch.clear();
+                }
             }
         }
-        if tx_out.is_none() { use std::io::Write; let _ = std::io::stdout().flush(); }
+        if tx_out.is_none() {
+            use std::io::Write;
+            let _ = std::io::stdout().flush();
+        }
         state.compactor.extend_last_block(ZoneType::ToolOutput, obs_tokens.len());
         state.prev_size = state.batch.n_tokens();
         state.n_cur = state.history.len() as i32;
@@ -70,7 +83,9 @@ impl super::Agent {
         while state.compactor.needs_compaction(needed) && evictions < 100 {
             let old_len = state.compactor.pages.len();
             self.enforce_compaction(state, needed)?;
-            if state.compactor.pages.len() >= old_len { break; }
+            if state.compactor.pages.len() >= old_len {
+                break;
+            }
             evictions += 1;
         }
         Ok(())

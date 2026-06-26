@@ -20,9 +20,7 @@ const N_THREADS: i32 = 4;
 
 /// Creates optimized model parameters for Apple Silicon (mlock).
 pub fn optimized_model_params() -> LlamaModelParams {
-    LlamaModelParams::default()
-        .with_n_gpu_layers(MAX_GPU_LAYERS)
-        .with_use_mmap(true)
+    LlamaModelParams::default().with_n_gpu_layers(MAX_GPU_LAYERS).with_use_mmap(true)
 }
 
 use std::num::NonZeroU32;

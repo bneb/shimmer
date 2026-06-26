@@ -80,7 +80,8 @@ fn test_buffer_clear_on_overflow_with_edit() {
 #[test]
 fn test_interceptor_state_reset() {
     let mut interceptor = ToolInterceptor::new(false, true);
-    interceptor.feed_token("<edit file=\"a.py\">\n<search>x</search>\n<replace>y</replace>\n</edit>");
+    interceptor
+        .feed_token("<edit file=\"a.py\">\n<search>x</search>\n<replace>y</replace>\n</edit>");
     assert!(interceptor.detected_full_edit.is_some());
 
     // Simulating a new turn by clearing buffer
@@ -99,7 +100,8 @@ fn test_interceptor_state_reset() {
 /// Token boundary fuzz: XML edit blocks parse correctly regardless of split point.
 #[test]
 fn test_interceptor_xml_parsing_token_boundary_fuzz() {
-    let edit = "<edit file=\"foo.py\">\n<search>\nold\n</search>\n<replace>\nnew\n</replace>\n</edit>";
+    let edit =
+        "<edit file=\"foo.py\">\n<search>\nold\n</search>\n<replace>\nnew\n</replace>\n</edit>";
     for split in 1..edit.len() {
         let mut interceptor = ToolInterceptor::new(false, true);
         interceptor.feed_token(&edit[..split]);
@@ -123,8 +125,11 @@ fn test_interceptor_json_tool_call_token_boundary_fuzz() {
         let mut interceptor = ToolInterceptor::new(false, true);
         let detected_first = interceptor.feed_token(&call[..split]);
         let detected_second = interceptor.feed_token(&call[split..]);
-        assert!(detected_first || detected_second,
-            "Tool call should be detected at split {}", split);
+        assert!(
+            detected_first || detected_second,
+            "Tool call should be detected at split {}",
+            split
+        );
         let (name, args, _child) = interceptor.detected_call.as_ref().unwrap();
         assert_eq!(name, "rg");
         assert_eq!(args, &serde_json::json!(["pattern"]));
@@ -134,7 +139,8 @@ fn test_interceptor_json_tool_call_token_boundary_fuzz() {
 /// Partial edit detection: full edit only fires when all parts are present.
 #[test]
 fn test_interceptor_partial_edit_not_detected_early() {
-    let edit = "<edit file=\"x.py\">\n<search>\nold\n</search>\n<replace>\nnew\n</replace>\n</edit>";
+    let edit =
+        "<edit file=\"x.py\">\n<search>\nold\n</search>\n<replace>\nnew\n</replace>\n</edit>";
     let close_pos = edit.rfind("</edit>").unwrap();
     let chars: Vec<char> = edit.chars().collect();
     let mut interceptor = ToolInterceptor::new(false, true);
@@ -143,8 +149,11 @@ fn test_interceptor_partial_edit_not_detected_early() {
         s.push(c);
         interceptor.feed_token(&s);
         if i < close_pos + "</edit>".len() - 1 {
-            assert!(interceptor.detected_full_edit.is_none(),
-                "Full edit detected before </edit> complete at char {}", i);
+            assert!(
+                interceptor.detected_full_edit.is_none(),
+                "Full edit detected before </edit> complete at char {}",
+                i
+            );
         }
     }
     assert!(interceptor.detected_full_edit.is_some());

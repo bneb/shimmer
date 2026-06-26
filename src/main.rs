@@ -9,7 +9,6 @@
 
 use anyhow::Result;
 use clap::Parser;
-
 use llama_cpp_2::llama_backend::LlamaBackend;
 use shimmer::{agent, engine};
 
@@ -24,10 +23,7 @@ Wait for the system to inject the results before continuing."#;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Path to the main GGUF model
-    #[arg(
-        long,
-        default_value = "models/gemma4-12b.gguf"
-    )]
+    #[arg(long, default_value = "models/gemma4-12b.gguf")]
     main_model: String,
 
     /// Prompt to send to the model
@@ -135,9 +131,7 @@ fn run_serve(
     let state = shimmer::server::AppState { agent, backend, config, api_key };
     let app = shimmer::server::create_router(state);
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
     rt.block_on(async {
         let listener = tokio::net::TcpListener::bind(bind_addr).await?;
         axum::serve(listener, app).await?;
@@ -152,7 +146,9 @@ fn do_warmup(
     config: &shimmer::agent::AgentConfig,
 ) -> Result<()> {
     tracing::info!("Warming up Metal engine...");
-    let warmup_prompt = "<|im_start|>assistant\nYou are an AI.<|im_end|>\n<|im_start|>user\nSay hi.<|im_end|>\n<|im_start|>assistant\n".to_string();
+    let warmup_prompt = "<|im_start|>assistant\nYou are an AI.<|im_end|>\n<|im_start|>user\nSay \
+                         hi.<|im_end|>\n<|im_start|>assistant\n"
+        .to_string();
     let _ = agent.process_query(backend, &warmup_prompt, config, None)?;
     tracing::info!("Warmup complete");
     Ok(())
@@ -195,7 +191,10 @@ fn run_single_query(
 fn print_result(result: &shimmer::agent::BenchmarkResult, title: &str) {
     tracing::info!(
         "[{}] {} tokens, {:.4}s, {:.2} TPS, {} chars",
-        title, result.token_count, result.duration_secs, result.tps,
+        title,
+        result.token_count,
+        result.duration_secs,
+        result.tps,
         result.generated_text.len()
     );
     tracing::debug!("{}", result.generated_text);
@@ -227,11 +226,7 @@ fn main() -> Result<()> {
 
     tracing::info!(
         "Speculative Decoding: {}",
-        if use_speculative {
-            "ENABLED"
-        } else {
-            "DISABLED"
-        }
+        if use_speculative { "ENABLED" } else { "DISABLED" }
     );
 
     let config = std::sync::Arc::new(create_agent_config(&args, use_speculative));
@@ -257,8 +252,9 @@ fn main() -> Result<()> {
         };
 
         let tdd_instruction = if args.teston {
-            "\nUse JSON tools: {\"name\":\"rg\",\"arguments\":[\"pattern\",\"path\"]}. Tools: rg, cat, fd, ls, git, run_test.\n\
-            When you have found the fix, write an edit tag with file= set to the real path, containing search and replace tags with the exact code."
+            "\nUse JSON tools: {\"name\":\"rg\",\"arguments\":[\"pattern\",\"path\"]}. Tools: rg, \
+             cat, fd, ls, git, run_test.\nWhen you have found the fix, write an edit tag with \
+             file= set to the real path, containing search and replace tags with the exact code."
         } else {
             ""
         };
@@ -287,14 +283,7 @@ fn main() -> Result<()> {
         );
 
         if args.enable_swarm {
-            run_swarm(
-                &agent,
-                &backend,
-                &args,
-                &config,
-                grammar_str.as_deref(),
-                &prompt,
-            )?;
+            run_swarm(&agent, &backend, &args, &config, grammar_str.as_deref(), &prompt)?;
         } else {
             run_single_query(&agent, &backend, &config, grammar_str.as_deref(), &prompt)?;
         }
@@ -345,11 +334,18 @@ fn parse_sample_config(raw: &str) -> shimmer::agent::SampleConfig {
     for part in raw.split(',') {
         let part = part.trim();
         if let Some(val) = part.strip_prefix("temp=") {
-            if let Ok(v) = val.parse::<f32>() { sc.temperature = v; }
+            if let Ok(v) = val.parse::<f32>() {
+                sc.temperature = v;
+            }
         } else if let Some(val) = part.strip_prefix("topk=") {
-            if let Ok(v) = val.parse::<usize>() { sc.top_k = v; }
+            if let Ok(v) = val.parse::<usize>() {
+                sc.top_k = v;
+            }
         } else if let Some(val) = part.strip_prefix("repp=")
-            && let Ok(v) = val.parse::<f32>() { sc.repetition_penalty = v; }
+            && let Ok(v) = val.parse::<f32>()
+        {
+            sc.repetition_penalty = v;
+        }
     }
     sc
 }

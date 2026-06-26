@@ -44,12 +44,7 @@ pub struct ContextManager {
 impl ContextManager {
     /// Initializes a new ContextManager with maximum capacity and compaction threshold.
     pub fn new(max_capacity: usize, threshold_pct: f64) -> Self {
-        Self {
-            pages: Vec::new(),
-            max_capacity,
-            threshold_pct,
-            recent_tool_outputs: 3,
-        }
+        Self { pages: Vec::new(), max_capacity, threshold_pct, recent_tool_outputs: 3 }
     }
 
     /// Pushes a new block of tokens into the context tracker.
@@ -58,11 +53,7 @@ impl ContextManager {
             return;
         }
         let start = self.pages.last().map(|b| b.end).unwrap_or(0);
-        self.pages.push(Page {
-            start,
-            end: start + len,
-            zone,
-        });
+        self.pages.push(Page { start, end: start + len, zone });
     }
 
     /// Extends the final block if it matches the zone type, otherwise pushes a new block.
@@ -94,7 +85,10 @@ impl ContextManager {
     /// System prompts are never evicted.
     pub fn find_compaction_target(&self) -> Option<usize> {
         // Collect indices of non-empty ToolOutput pages
-        let tool_indices: Vec<usize> = self.pages.iter().enumerate()
+        let tool_indices: Vec<usize> = self
+            .pages
+            .iter()
+            .enumerate()
             .filter(|(_, b)| b.zone == ZoneType::ToolOutput && b.end > b.start)
             .map(|(i, _)| i)
             .collect();
@@ -173,8 +167,9 @@ impl ContextManager {
 #[cfg(test)]
 /// Test suite for compaction logic.
 mod tests {
-    use super::*;
     use llama_cpp_2::token::LlamaToken;
+
+    use super::*;
 
     #[test]
     /// Tests pushing blocks and correctly compacting them.
@@ -311,10 +306,10 @@ mod tests {
 
         cm.push_block(ZoneType::System, 10);
         // 4 tool output pages — only the oldest (1st) should be evictable
-        cm.push_block(ZoneType::ToolOutput, 5);  // oldest — evictable
-        cm.push_block(ZoneType::ToolOutput, 5);  // 2nd oldest — evictable
-        cm.push_block(ZoneType::ToolOutput, 5);  // recent (3rd newest)
-        cm.push_block(ZoneType::ToolOutput, 5);  // most recent (4th)
+        cm.push_block(ZoneType::ToolOutput, 5); // oldest — evictable
+        cm.push_block(ZoneType::ToolOutput, 5); // 2nd oldest — evictable
+        cm.push_block(ZoneType::ToolOutput, 5); // recent (3rd newest)
+        cm.push_block(ZoneType::ToolOutput, 5); // most recent (4th)
 
         // 4 tool outputs, skip=3 → first one (index 1, start=10) gets evicted
         let (start, _) = cm.compact(&mut hist, 0).unwrap();

@@ -1,10 +1,11 @@
-use anyhow::Result;
-use ignore::WalkBuilder;
-use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use ignore::WalkBuilder;
+use regex::Regex;
 
 /// Extracts high-signal search terms from the raw prompt.
 pub fn extract_search_terms(prompt: &str) -> HashSet<String> {
@@ -64,10 +65,7 @@ pub fn build_context_from_terms(dir: &Path, terms: &HashSet<String>) -> Result<V
     let combined_pattern = format!("({})", escaped_terms.join("|"));
     let re = Regex::new(&combined_pattern)?;
 
-    let walker = WalkBuilder::new(dir)
-        .hidden(true)
-        .git_ignore(true)
-        .build();
+    let walker = WalkBuilder::new(dir).hidden(true).git_ignore(true).build();
 
     for result in walker {
         let entry = match result {
@@ -94,23 +92,20 @@ pub fn build_context_from_terms(dir: &Path, terms: &HashSet<String>) -> Result<V
     for (path, mut hits) in matches_by_file {
         hits.sort_by_key(|(ln, _)| *ln);
         let score = hits.len();
-        
+
         let mut snippet = String::new();
         let mut last_line: Option<usize> = None;
         for (line_num, line) in &hits {
             if let Some(ll) = last_line
-                && *line_num > ll + 1 {
-                    snippet.push_str("...\n");
-                }
+                && *line_num > ll + 1
+            {
+                snippet.push_str("...\n");
+            }
             snippet.push_str(&format!("{}: {}\n", line_num + 1, line));
             last_line = Some(*line_num);
         }
 
-        context_matches.push(ContextMatch {
-            file_path: path,
-            snippet,
-            score,
-        });
+        context_matches.push(ContextMatch { file_path: path, snippet, score });
     }
 
     context_matches.sort_by_key(|b| std::cmp::Reverse(b.score));
@@ -130,7 +125,9 @@ pub fn scan_repo_structure(dir: &Path) -> String {
         for entry in entries.flatten() {
             let path = entry.path();
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if name.starts_with('.') || name == "target" || name == "node_modules" { continue; }
+            if name.starts_with('.') || name == "target" || name == "node_modules" {
+                continue;
+            }
             let prefix = if path.is_dir() { "  [dir] " } else { "  [file] " };
             result.push_str(&format!("{}{}\n", prefix, name));
         }
@@ -152,14 +149,15 @@ pub fn scan_repo_structure(dir: &Path) -> String {
     // Also check for tests/ subdirectory
     let tests_dir = dir.join("tests");
     if tests_dir.is_dir()
-        && let Ok(entries) = std::fs::read_dir(&tests_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.ends_with(".py") || name.ends_with(".rs") || name.ends_with(".js") {
-                    test_files.push(format!("tests/{}", name));
-                }
+        && let Ok(entries) = std::fs::read_dir(&tests_dir)
+    {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with(".py") || name.ends_with(".rs") || name.ends_with(".js") {
+                test_files.push(format!("tests/{}", name));
             }
         }
+    }
     if !test_files.is_empty() {
         test_files.truncate(20);
         result.push_str("## Test Files\n");
@@ -210,12 +208,14 @@ pub fn write_context_file(prompt: &str, dir: &Path) -> Result<Option<String>> {
     };
     let ctx_path = dir.join(".shimmer_context");
     // Strip XML wrapper tags so the output reads naturally in cat
-    let clean = context
-        .replace("<repository_context>\n", "")
-        .replace("</repository_context>\n", "");
+    let clean =
+        context.replace("<repository_context>\n", "").replace("</repository_context>\n", "");
     std::fs::write(&ctx_path, &clean)?;
-    Ok(Some("Hint: I pre-searched the repo for relevant terms and saved results to .shimmer_context. \
-         Use `cat .shimmer_context` to view them if helpful.\n".to_string()))
+    Ok(Some(
+        "Hint: I pre-searched the repo for relevant terms and saved results to .shimmer_context. \
+         Use `cat .shimmer_context` to view them if helpful.\n"
+            .to_string(),
+    ))
 }
 
 fn cache_key(prompt: &str, dir: &Path) -> Option<String> {
@@ -245,11 +245,7 @@ fn cache_dir() -> PathBuf {
 fn read_preprocessor_cache(prompt: &str, dir: &Path) -> Option<String> {
     let key = cache_key(prompt, dir)?;
     let path = cache_dir().join(&key);
-    if path.exists() {
-        std::fs::read_to_string(&path).ok()
-    } else {
-        None
-    }
+    if path.exists() { std::fs::read_to_string(&path).ok() } else { None }
 }
 
 fn write_preprocessor_cache(prompt: &str, dir: &Path, content: &str) {
@@ -262,14 +258,17 @@ fn write_preprocessor_cache(prompt: &str, dir: &Path, content: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use tempfile::tempdir;
     use std::fs::File;
     use std::io::Write;
 
+    use tempfile::tempdir;
+
+    use super::*;
+
     #[test]
     fn test_extract_search_terms() {
-        let prompt = "Error in astropy/nddata/mixins/ndarithmetic.py with NDArithmeticMixin and _arithmetic_mask handling idx_customers_map[i]";
+        let prompt = "Error in astropy/nddata/mixins/ndarithmetic.py with NDArithmeticMixin and \
+                      _arithmetic_mask handling idx_customers_map[i]";
         let terms = extract_search_terms(prompt);
         assert!(terms.contains("astropy/nddata/mixins/ndarithmetic.py"));
         assert!(terms.contains("NDArithmeticMixin"));
@@ -285,10 +284,10 @@ mod tests {
         writeln!(file, "def foo():").unwrap();
         writeln!(file, "    _arithmetic_mask = 1").unwrap();
         writeln!(file, "    return _arithmetic_mask").unwrap();
-        
+
         let mut terms = HashSet::new();
         terms.insert("_arithmetic_mask".to_string());
-        
+
         let matches = build_context_from_terms(dir.path(), &terms).unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].score, 2);
@@ -302,7 +301,7 @@ mod tests {
         let file_path = dir.path().join("test.py");
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "def _arithmetic_mask(): pass").unwrap();
-        
+
         let prompt = "Fix _arithmetic_mask";
         let ctx = preprocess_prompt(prompt, dir.path()).unwrap();
         assert!(ctx.is_some());

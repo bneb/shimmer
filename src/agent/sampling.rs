@@ -5,9 +5,10 @@
 //! selects the argmax token (greedy). When temperature > 0, samples from
 //! the softmax distribution.
 
-use super::state::EngineState;
 use anyhow::Result;
 use rand::Rng;
+
+use super::state::EngineState;
 
 impl super::Agent {
     /// Samples the next token from the engine state. Greedy argmax when
@@ -76,15 +77,13 @@ impl super::Agent {
     }
 
     /// Retains only the top-k candidates by logit value. No-op when k is 0.
-    fn apply_top_k(
-        &self,
-        scored: &mut Vec<(llama_cpp_2::token::LlamaToken, f32)>,
-        k: usize,
-    ) {
+    fn apply_top_k(&self, scored: &mut Vec<(llama_cpp_2::token::LlamaToken, f32)>, k: usize) {
         if k == 0 || k >= scored.len() {
             return;
         }
-        scored.select_nth_unstable_by(k, |a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.select_nth_unstable_by(k, |a, b| {
+            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(k);
     }
 }

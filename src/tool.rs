@@ -22,11 +22,11 @@ pub fn is_idempotent(tool_name: &str, args: &[String]) -> Result<bool, String> {
             }
         }
         "sed" => {
-            let is_destructive = args
-                .iter()
-                .any(|arg| arg == "-i" || arg.starts_with("--in-place"));
+            let is_destructive =
+                args.iter().any(|arg| arg == "-i" || arg.starts_with("--in-place"));
             if is_destructive {
-                Err("[SYSTEM ERROR: 'sed -i' is forbidden. Use XML edit blocks to modify files.]".to_string())
+                Err("[SYSTEM ERROR: 'sed -i' is forbidden. Use XML edit blocks to modify files.]"
+                    .to_string())
             } else {
                 Ok(true)
             }
@@ -44,16 +44,10 @@ pub fn spawn_tool(tool_name: &str, args: &[String]) -> std::io::Result<Child> {
 
     // Hardcode default args for ripgrep
     if tool_name == "rg" {
-        cmd.arg("--color=never")
-            .arg("--no-heading")
-            .arg("--line-number");
+        cmd.arg("--color=never").arg("--no-heading").arg("--line-number");
     }
 
-    cmd.args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()
 }
 
 /// Waits for a spawned tool child process to finish, processing and wrapping
@@ -70,18 +64,26 @@ fn wait_with_timeout(child: &mut Child, timeout_secs: u64) -> String {
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let stdout = child.stdout.take().map(|mut p| {
-                    let mut buf = Vec::new();
-                    use std::io::Read;
-                    let _ = p.read_to_end(&mut buf);
-                    buf
-                }).unwrap_or_default();
-                let stderr = child.stderr.take().map(|mut p| {
-                    let mut buf = Vec::new();
-                    use std::io::Read;
-                    let _ = p.read_to_end(&mut buf);
-                    buf
-                }).unwrap_or_default();
+                let stdout = child
+                    .stdout
+                    .take()
+                    .map(|mut p| {
+                        let mut buf = Vec::new();
+                        use std::io::Read;
+                        let _ = p.read_to_end(&mut buf);
+                        buf
+                    })
+                    .unwrap_or_default();
+                let stderr = child
+                    .stderr
+                    .take()
+                    .map(|mut p| {
+                        let mut buf = Vec::new();
+                        use std::io::Read;
+                        let _ = p.read_to_end(&mut buf);
+                        buf
+                    })
+                    .unwrap_or_default();
                 return process_tool_output(Output { status, stdout, stderr });
             }
             Ok(None) => {
@@ -108,9 +110,15 @@ pub fn execute_tool(tool_name: &str, args: &[String]) -> String {
             let mut start_line = 0;
             let mut end_line = usize::MAX;
             if args.len() > 1
-                && let Ok(s) = args[1].parse::<usize>() { start_line = s.saturating_sub(1); }
+                && let Ok(s) = args[1].parse::<usize>()
+            {
+                start_line = s.saturating_sub(1);
+            }
             if args.len() > 2
-                && let Ok(e) = args[2].parse::<usize>() { end_line = e; }
+                && let Ok(e) = args[2].parse::<usize>()
+            {
+                end_line = e;
+            }
             let lines: Vec<&str> = content.lines().collect();
             let sliced_lines = &lines[start_line.min(lines.len())..end_line.min(lines.len())];
 
@@ -119,13 +127,11 @@ pub fn execute_tool(tool_name: &str, args: &[String]) -> String {
                 numbered.push_str(&format!("{}: {}\n", start_line + i + 1, line));
             }
 
-            let raw_content: String = sliced_lines
-                .iter()
-                .fold(String::new(), |mut acc, l| {
-                    acc.push_str(l);
-                    acc.push('\n');
-                    acc
-                });
+            let raw_content: String = sliced_lines.iter().fold(String::new(), |mut acc, l| {
+                acc.push_str(l);
+                acc.push('\n');
+                acc
+            });
 
             let budget = MAX_OUTPUT_CHARS / 2;
             let numbered_trunc: String = numbered.chars().take(budget).collect();
@@ -141,7 +147,8 @@ pub fn execute_tool(tool_name: &str, args: &[String]) -> String {
             let total_chars = numbered.chars().count() + raw_content.chars().count();
             if total_chars > MAX_OUTPUT_CHARS {
                 combined.push_str(&format!(
-                    "\n[...TRUNCATED: output too long. Use `cat {} <start> <end>` for specific sections.]",
+                    "\n[...TRUNCATED: output too long. Use `cat {} <start> <end>` for specific \
+                     sections.]",
                     file_path
                 ));
             }
@@ -156,20 +163,19 @@ pub fn execute_tool(tool_name: &str, args: &[String]) -> String {
             args[0].clone()
         } else {
             let (first, rest) = args.split_at(1);
-            let rest_quoted: Vec<String> = rest.iter().map(|a| {
-                shlex::try_quote(a)
-                    .unwrap_or_else(|_| std::borrow::Cow::Owned(a.clone()))
-                    .into_owned()
-            }).collect();
+            let rest_quoted: Vec<String> = rest
+                .iter()
+                .map(|a| {
+                    shlex::try_quote(a)
+                        .unwrap_or_else(|_| std::borrow::Cow::Owned(a.clone()))
+                        .into_owned()
+                })
+                .collect();
             format!("{} {}", first[0], rest_quoted.join(" "))
         };
         let mut cmd = Command::new("bash");
 
-        let output_result = cmd
-            .arg("-c")
-            .arg(&test_cmd)
-            .stdin(Stdio::null())
-            .output();
+        let output_result = cmd.arg("-c").arg(&test_cmd).stdin(Stdio::null()).output();
 
         let content = match output_result {
             Ok(out) => process_tool_output(out),
@@ -182,15 +188,10 @@ pub fn execute_tool(tool_name: &str, args: &[String]) -> String {
     let mut cmd = Command::new(cmd_name);
 
     if tool_name == "rg" {
-        cmd.arg("--color=never")
-            .arg("--no-heading")
-            .arg("--line-number");
+        cmd.arg("--color=never").arg("--no-heading").arg("--line-number");
     }
 
-    let output_result = cmd
-        .args(args)
-        .stdin(Stdio::null())
-        .output();
+    let output_result = cmd.args(args).stdin(Stdio::null()).output();
 
     let content = match output_result {
         Ok(out) => process_tool_output(out),
@@ -218,26 +219,31 @@ fn process_tool_output(out: Output) -> String {
         let err_msg = String::from_utf8_lossy(&out.stderr);
         let stdout_str = String::from_utf8_lossy(&out.stdout).into_owned();
         if !stdout_str.trim().is_empty() {
-            return format!("Partial output (command failed with code {}):\n{}\n\nStderr: {}",
-                code, stdout_str, err_msg.trim());
+            return format!(
+                "Partial output (command failed with code {}):\n{}\n\nStderr: {}",
+                code,
+                stdout_str,
+                err_msg.trim()
+            );
         }
         return format!("ERROR - Command failed: {}", err_msg.trim());
     }
 
     let lossy_str = String::from_utf8_lossy(&out.stdout).into_owned();
-    
+
     // SMART CHUNKING
     let lines: Vec<&str> = lossy_str.lines().collect();
     if lines.len() > 150 || lossy_str.chars().count() > MAX_OUTPUT_CHARS {
         let mut anchors = Vec::new();
-        let anchor_keywords = ["Traceback", "FAIL:", "ERROR:", "Exception:", "AssertionError", "Err", "warning:"];
-        
+        let anchor_keywords =
+            ["Traceback", "FAIL:", "ERROR:", "Exception:", "AssertionError", "Err", "warning:"];
+
         for (i, line) in lines.iter().enumerate() {
             if anchor_keywords.iter().any(|&k| line.contains(k)) {
                 anchors.push(i);
             }
         }
-        
+
         if !anchors.is_empty() {
             let mut include_lines = std::collections::HashSet::new();
             for a in anchors {
@@ -247,13 +253,13 @@ fn process_tool_output(out: Output) -> String {
                     include_lines.insert(i);
                 }
             }
-            
+
             let mut sorted_includes: Vec<usize> = include_lines.into_iter().collect();
             sorted_includes.sort_unstable();
-            
+
             let mut smart_output = String::new();
             let mut last_idx: i32 = -1;
-            
+
             for &i in &sorted_includes {
                 if last_idx != -1 && i as i32 > last_idx + 1 {
                     let skipped = i as i32 - last_idx - 1;
@@ -263,9 +269,12 @@ fn process_tool_output(out: Output) -> String {
                 smart_output.push('\n');
                 last_idx = i as i32;
             }
-            
-            smart_output.push_str("\n[Output was smart-chunked around errors. Use 'grep -C 50 <error_string>' if you need more context]");
-            
+
+            smart_output.push_str(
+                "\n[Output was smart-chunked around errors. Use 'grep -C 50 <error_string>' if \
+                 you need more context]",
+            );
+
             if smart_output.chars().count() <= MAX_OUTPUT_CHARS {
                 return smart_output;
             }
@@ -285,10 +294,7 @@ fn process_tool_output(out: Output) -> String {
 
 /// Wraps formatted tool output text into a standardized system observation block.
 fn wrap_observation(content: &str) -> String {
-    format!(
-        "\n[SYSTEM OBSERVED OUTPUT START]\n{}\n[SYSTEM OBSERVED OUTPUT END]\n",
-        content
-    )
+    format!("\n[SYSTEM OBSERVED OUTPUT START]\n{}\n[SYSTEM OBSERVED OUTPUT END]\n", content)
 }
 
 #[cfg(test)]

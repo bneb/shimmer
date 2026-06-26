@@ -93,12 +93,7 @@ pub fn generate_draft_tokens(
     draft_size: usize,
     ngram_size: usize,
 ) -> Result<Vec<Vec<LlamaToken>>> {
-    Ok(extract_draft_branches(
-        history,
-        main_model.token_eos(),
-        draft_size,
-        ngram_size,
-    ))
+    Ok(extract_draft_branches(history, main_model.token_eos(), draft_size, ngram_size))
 }
 
 /// Extracts the maximum likelihood token `m_0` from the previous context evaluation.
@@ -106,11 +101,7 @@ pub fn generate_draft_tokens(
 fn get_m0(main_ctx: &mut LlamaContext, prev_main_batch_size: i32) -> LlamaToken {
     main_ctx
         .candidates_ith(prev_main_batch_size - 1)
-        .max_by(|a, b| {
-            a.logit()
-                .partial_cmp(&b.logit())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .max_by(|a, b| a.logit().partial_cmp(&b.logit()).unwrap_or(std::cmp::Ordering::Equal))
         .map(|c| c.id())
         .unwrap()
 }
@@ -164,11 +155,7 @@ fn evaluate_single_branch(
     for i in 1..branch.len() {
         let m_i = main_ctx
             .candidates_ith(token_indices[i - 1])
-            .max_by(|a, b| {
-                a.logit()
-                    .partial_cmp(&b.logit())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            .max_by(|a, b| a.logit().partial_cmp(&b.logit()).unwrap_or(std::cmp::Ordering::Equal))
             .map(|c| c.id())
             .unwrap();
 
@@ -181,11 +168,7 @@ fn evaluate_single_branch(
 
     let correction = main_ctx
         .candidates_ith(*token_indices.last().unwrap())
-        .max_by(|a, b| {
-            a.logit()
-                .partial_cmp(&b.logit())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .max_by(|a, b| a.logit().partial_cmp(&b.logit()).unwrap_or(std::cmp::Ordering::Equal))
         .map(|c| c.id())
         .unwrap();
     (accepted, correction)
@@ -252,16 +235,9 @@ pub fn verify_draft_tokens(
         });
     }
 
-    let branch_token_indices = prepare_batch(
-        main_batch,
-        seq_id,
-        draft_branches,
-        &valid_indices,
-        n_cur_start,
-    )?;
-    main_ctx
-        .decode(main_batch)
-        .map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
+    let branch_token_indices =
+        prepare_batch(main_batch, seq_id, draft_branches, &valid_indices, n_cur_start)?;
+    main_ctx.decode(main_batch).map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
     Ok(evaluate_branches(
         main_ctx,
         draft_branches,
@@ -293,9 +269,7 @@ pub fn rollback_and_correct(
     main_batch
         .add(verification.correction_token, rollback_pos, &[seq_id], true)
         .map_err(|e| anyhow::anyhow!("Batch add error: {}", e))?;
-    main_ctx
-        .decode(main_batch)
-        .map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
+    main_ctx.decode(main_batch).map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
 
     Ok(1)
 }
@@ -310,11 +284,7 @@ pub struct AdaptiveTracker {
 impl Default for AdaptiveTracker {
     /// Provides the default configuration for the adaptive tracker, starting with an initial moving average of 1.0.
     fn default() -> Self {
-        Self {
-            moving_avg: 1.0,
-            alpha: 0.2,
-            tokens_since_disable: 0,
-        }
+        Self { moving_avg: 1.0, alpha: 0.2, tokens_since_disable: 0 }
     }
 }
 
@@ -375,10 +345,7 @@ mod tests {
         let branches = extract_draft_branches(&history, eos, 3, 3);
         assert_eq!(branches.len(), 1);
         // The drafted tokens should be [4, 5, 6]
-        assert_eq!(
-            branches[0],
-            vec![LlamaToken::new(4), LlamaToken::new(5), LlamaToken::new(6)]
-        );
+        assert_eq!(branches[0], vec![LlamaToken::new(4), LlamaToken::new(5), LlamaToken::new(6)]);
     }
 
     /// Ensures that drafting halts correctly when an End-Of-Sequence (EOS) token is encountered.
@@ -466,8 +433,12 @@ mod tests {
     fn test_extract_draft_no_match() {
         let eos = LlamaToken::new(99);
         let history = vec![
-            LlamaToken::new(1), LlamaToken::new(2), LlamaToken::new(3),
-            LlamaToken::new(4), LlamaToken::new(5), LlamaToken::new(6),
+            LlamaToken::new(1),
+            LlamaToken::new(2),
+            LlamaToken::new(3),
+            LlamaToken::new(4),
+            LlamaToken::new(5),
+            LlamaToken::new(6),
         ];
         let branches = extract_draft_branches(&history, eos, 3, 3);
         assert!(branches.is_empty());
@@ -476,9 +447,7 @@ mod tests {
     #[test]
     fn test_build_draft_eos_halts() {
         let eos = LlamaToken::new(99);
-        let history = vec![
-            LlamaToken::new(1), LlamaToken::new(2), eos, LlamaToken::new(4),
-        ];
+        let history = vec![LlamaToken::new(1), LlamaToken::new(2), eos, LlamaToken::new(4)];
         let draft = build_draft_branch(&history, eos, 3, 1);
         assert_eq!(draft.len(), 2);
         assert_eq!(draft[1], eos);
