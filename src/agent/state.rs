@@ -111,3 +111,73 @@ pub struct SwarmState<'a> {
     pub batch: llama_cpp_2::llama_batch::LlamaBatch<'a>,
     pub agents: Vec<AgentState>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constants_have_expected_values() {
+        assert_eq!(BATCH_SIZE, 512);
+        assert_eq!(CTX_SIZE, 16384);
+        assert_eq!(MAX_TOKENS, 8192);
+        assert_eq!(MAX_TOKEN_BYTES, 128);
+        assert!((COMPACT_THRESH - 0.9).abs() < 0.001);
+        assert_eq!(BATCH_SEQ_ID, 0);
+        assert_eq!(HARD_TOOL_LIMIT, 8);
+        assert_eq!(STUBBORN_ABORT_LIMIT, 11);
+    }
+
+    #[test]
+    fn test_sample_config_default_is_greedy() {
+        let cfg = SampleConfig::default();
+        assert_eq!(cfg.temperature, 0.0);
+        assert_eq!(cfg.top_k, 0);
+        assert_eq!(cfg.repetition_penalty, 1.0);
+    }
+
+    #[test]
+    fn test_sample_config_clone() {
+        let cfg = SampleConfig { temperature: 0.5, top_k: 40, repetition_penalty: 1.05 };
+        let cfg2 = cfg.clone();
+        assert_eq!(cfg2.temperature, 0.5);
+        assert_eq!(cfg2.top_k, 40);
+    }
+
+    #[test]
+    fn test_agent_config_default_disables_tools() {
+        let cfg = AgentConfig::default();
+        assert!(!cfg.enable_tdd_enforcement);
+        assert!(!cfg.enable_search_verifier);
+        assert!(!cfg.enable_path_blocker);
+        assert!(!cfg.enable_insanity_detector);
+        assert!(!cfg.enable_syntax_checker);
+        assert!(!cfg.enable_blind_edit_blocker);
+        assert!(!cfg.disable_tool_interceptor);
+        assert!(!cfg.execute_tools_locally);
+    }
+
+    #[test]
+    fn test_agent_config_with_tools_disabled() {
+        let cfg = AgentConfig {
+            disable_tool_interceptor: true,
+            execute_tools_locally: false,
+            ..Default::default()
+        };
+        assert!(cfg.disable_tool_interceptor);
+        assert!(!cfg.execute_tools_locally);
+    }
+
+    #[test]
+    fn test_benchmark_result_construction() {
+        let r = BenchmarkResult {
+            generated_text: "hello".to_string(),
+            token_count: 100,
+            duration_secs: 2.5,
+            tps: 40.0,
+        };
+        assert_eq!(r.generated_text, "hello");
+        assert_eq!(r.token_count, 100);
+        assert!((r.tps - 40.0).abs() < 0.01);
+    }
+}

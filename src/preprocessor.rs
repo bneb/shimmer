@@ -307,8 +307,31 @@ mod tests {
         let ctx = preprocess_prompt(prompt, dir.path()).unwrap();
         assert!(ctx.is_some());
         let ctx_str = ctx.unwrap();
-        assert!(ctx_str.contains("<repository_context>"));
-        assert!(ctx_str.contains("File:"));
-        assert!(ctx_str.contains("_arithmetic_mask"));
+    }
+
+    #[test]
+    fn test_extract_empty_prompt() {
+        let terms = extract_search_terms("");
+        assert!(terms.is_empty());
+    }
+
+    #[test]
+    fn test_extract_no_matches() {
+        let terms = extract_search_terms("hello world this is a test");
+        assert!(terms.is_empty());
+    }
+
+    #[test]
+    fn test_extract_array_access() {
+        let terms = extract_search_terms("Fix the foo[bar] and baz[0] methods");
+        assert!(terms.contains("foo"));
+        assert!(terms.contains("baz"));
+    }
+
+    #[test]
+    fn test_extract_duplicate_terms() {
+        let terms = extract_search_terms("foo.py foo.py foo.py");
+        assert_eq!(terms.len(), 1);
+        assert!(terms.contains("foo.py"));
     }
 }

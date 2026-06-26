@@ -9,6 +9,7 @@ Each benchmark is designed to illustrate a specific performance characteristic. 
 
 ## 2. Agentic Workloads (`agentic/`)
 Traditional LLM benchmarks evaluate zero-shot or raw generation. However, autonomous agents spend 90% of their time emitting repetitive XML blocks and file content. These benchmarks test Shimmer against standard execution wrappers in realistic SWE scenarios:
+* **`generate_swe_bench.py`**: Primary SWE-bench Lite evaluation harness. Supports both **agentic** mode (model-driven investigation with tools) and **agentless** mode (keyword-based file localization + single-shot repair). `--agentless` flag enables the agentless pipeline; `--resume` handles partial runs.
 * **`simulated_edit_file.py`**: Generates a massive block of code to test how fast the engine can iterate through repetitive tokens using Prompt Lookup Decoding.
 * **`swe_bench_shimmer.py`**: Runs a real-world software engineering ticket (Flask #4944) utilizing Shimmer's UNIX domain socket and native XML parsing.
 * **`swe_bench_ollama.py`**: Runs the exact same Flask ticket against a standard Ollama HTTP API backend to establish a baseline.

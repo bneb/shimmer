@@ -8,11 +8,9 @@ import shutil
 import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "benchmarks", "agentic"))
-from generate_swe_bench import (
-    localize_files_keyword,
-    build_agentless_prompt,
-    scan_repo,
-)
+from harness.keywords import localize_files_keyword
+from harness.prompts import build_agentless_prompt
+from harness.snippets import scan_repo
 
 
 # ── localize_files_keyword ────────────────────────────────────────────────

@@ -445,4 +445,48 @@ mod tests {
         tracker.update_autoregressive();
         assert_eq!(tracker.current_draft_size(24), 24);
     }
+
+    #[test]
+    fn test_extract_draft_empty_history() {
+        let eos = LlamaToken::new(99);
+        let history: Vec<LlamaToken> = vec![];
+        let branches = extract_draft_branches(&history, eos, 3, 3);
+        assert!(branches.is_empty());
+    }
+
+    #[test]
+    fn test_extract_draft_history_shorter_than_ngram() {
+        let eos = LlamaToken::new(99);
+        let history = vec![LlamaToken::new(1), LlamaToken::new(2)];
+        let branches = extract_draft_branches(&history, eos, 3, 3);
+        assert!(branches.is_empty());
+    }
+
+    #[test]
+    fn test_extract_draft_no_match() {
+        let eos = LlamaToken::new(99);
+        let history = vec![
+            LlamaToken::new(1), LlamaToken::new(2), LlamaToken::new(3),
+            LlamaToken::new(4), LlamaToken::new(5), LlamaToken::new(6),
+        ];
+        let branches = extract_draft_branches(&history, eos, 3, 3);
+        assert!(branches.is_empty());
+    }
+
+    #[test]
+    fn test_build_draft_eos_halts() {
+        let eos = LlamaToken::new(99);
+        let history = vec![
+            LlamaToken::new(1), LlamaToken::new(2), eos, LlamaToken::new(4),
+        ];
+        let draft = build_draft_branch(&history, eos, 3, 1);
+        assert_eq!(draft.len(), 2);
+        assert_eq!(draft[1], eos);
+    }
+
+    #[test]
+    fn test_adaptive_tracker_new() {
+        let tracker = AdaptiveTracker::new();
+        assert_eq!(tracker.current_draft_size(32), 32);
+    }
 }

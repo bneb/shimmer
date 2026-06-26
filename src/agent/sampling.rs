@@ -105,7 +105,7 @@ fn sample_from_distribution(
     if exp_sum <= 0.0 {
         return argmax(scored);
     }
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let target: f32 = rng.random();
     let mut cumulative = 0.0f32;
     for (id, score) in scored {

@@ -1,22 +1,52 @@
 {
   "model": "gemma4-12b",
+  "mode": "hybrid",
   "sample_cfg": "temp=0.0,topk=0,repp=1.0",
-  "instances": 1,
-  "total_wall_s": 357.0,
+  "seed": 42,
+  "instances": 3,
+  "total_wall_s": 1387,
   "results": [
     {
-      "instance_id": "django__django-10914",
+      "instance_id": "django__django-13551",
       "model": "shimmer-gemma4-12b",
-      "wall_time_s": 174.1,
-      "patch_chars": 625,
-      "tps": 1.69,
-      "tool_calls": 4,
-      "edits_found": 2,
+      "mode": "hybrid",
+      "wall_time_s": 350,
+      "tool_calls": 1,
+      "edits_found": 1,
       "edits_applied": 1,
-      "edits_failed": 1,
+      "edits_failed": 0,
       "tests_pass": null,
-      "model_patch": "diff --git a/django/conf/global_settings.py b/django/conf/global_settings.py\nindex acee9887d2..bdeec80610 100644\n--- a/django/conf/global_settings.py\n+++ b/django/conf/global_settings.py\n@@ -304,7 +304,7 @@ FILE_UPLOAD_TEMP_DIR = None\n \n # The numeric mode to set newly-uploaded files to. The value should be a mode\n # you'd pass directly to os.chmod; see https://docs.python.org/library/os.html#files-and-directories.\n-FILE_UPLOAD_PERMISSIONS = None\n+FILE_UPLOAD_PERMISSIONS = 0o644\n \n # The numeric mode to assign to newly-created directories, when uploading files.\n # The value should be a mode as you'd pass to os.chmod;\n",
-      "sample_cfg": "temp=0.0,topk=0,repp=1.0"
+      "sample_cfg": "temp=0.0,topk=0,repp=1.0",
+      "patch_chars": 507,
+      "model_patch": "diff --git a/django/contrib/auth/base_user.py b/django/contrib/auth/base_user.py\nindex 3a4a64ee19..377b613444 100644\n--- a/django/contrib/auth/base_user.py\n+++ b/django/contrib/auth/base_user.py\n@@ -134,6 +134,7 @@ class AbstractBaseUser(models.Model):\n         return salted_hmac(\n             key_salt,\n             self.password,\n+            self.get_email_field_name(),\n             # RemovedInDjango40Warning: when the deprecation ends, replace\n             # with:\n             # algorithm='sha256',\n"
+    },
+    {
+      "instance_id": "django__django-11099",
+      "model": "shimmer-gemma4-12b",
+      "mode": "hybrid",
+      "wall_time_s": 137,
+      "tool_calls": 0,
+      "edits_found": 2,
+      "edits_applied": 2,
+      "edits_failed": 0,
+      "tests_pass": null,
+      "sample_cfg": "temp=0.0,topk=0,repp=1.0",
+      "patch_chars": 841,
+      "model_patch": "diff --git a/django/contrib/auth/validators.py b/django/contrib/auth/validators.py\nindex b4878cfd45..18bf4f79d6 100644\n--- a/django/contrib/auth/validators.py\n+++ b/django/contrib/auth/validators.py\n@@ -7,7 +7,6 @@ from django.utils.translation import gettext_lazy as _\n \n @deconstructible\n class ASCIIUsernameValidator(validators.RegexValidator):\n-    regex = r'^[\\w.@+-]+$'\n     message = _(\n         'Enter a valid username. This value may contain only English letters, '\n         'numbers, and @/./+/-/_ characters.'\n@@ -17,7 +16,6 @@ class ASCIIUsernameValidator(validators.RegexValidator):\n \n @deconstructible\n class UnicodeUsernameValidator(validators.RegexValidator):\n-    regex = r'^[\\w.@+-]+$'\n     message = _(\n         'Enter a valid username. This value may contain only letters, '\n         'numbers, and @/./+/-/_ characters.'\n"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-25498",
+      "model": "shimmer-gemma4-12b",
+      "mode": "hybrid",
+      "wall_time_s": 900,
+      "tool_calls": 2,
+      "edits_found": 0,
+      "edits_applied": 0,
+      "edits_failed": 0,
+      "tests_pass": null,
+      "sample_cfg": "temp=0.0,topk=0,repp=1.0",
+      "patch_chars": 0,
+      "model_patch": ""
     }
   ]
 }

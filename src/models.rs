@@ -80,12 +80,12 @@ impl CanonicalModel {
 
     /// Returns the recommended default for speculative decoding.
     ///
-    /// Enabled by default: prompt lookup decoding provides a ~55% throughput
-    /// improvement on raw text generation. Disable with --speculative false
-    /// for agentic workloads — n-gram drafts from prompt text can corrupt
-    /// JSON tool-call markers (missing braces, token fusion).
+    /// Disabled by default: n-gram drafts from prompt text cause token
+    /// corruption in structured output — missing braces and quotes in
+    /// JSON tool calls, fused XML tags, dropped characters.
+    /// Enable manually with --speculative for raw text generation only.
     pub fn supports_speculative_decoding(&self) -> bool {
-        true
+        false
     }
 }
 

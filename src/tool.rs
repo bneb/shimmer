@@ -350,4 +350,17 @@ mod tests {
         let child = spawn_tool("read_file", &["Cargo.toml".into()]);
         assert!(child.is_ok());
     }
+
+    #[test]
+    fn test_wrap_observation_formats_correctly() {
+        let result = wrap_observation("test output");
+        assert!(result.contains("[SYSTEM OBSERVED OUTPUT START]"));
+        assert!(result.contains("test output"));
+        assert!(result.contains("[SYSTEM OBSERVED OUTPUT END]"));
+    }
+
+    #[test]
+    fn test_is_idempotent_empty_tool_name() {
+        assert!(!is_idempotent("", &[]).unwrap_or(true));
+    }
 }

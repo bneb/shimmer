@@ -1,92 +1,83 @@
-# Project Shimmer
+# Shimmer
 
-Shimmer is a low-latency execution engine for local LLM agents, built natively for Apple Silicon via Apple Metal and `llama.cpp`.
+Local LLM execution engine for agentic coding on Apple Silicon, built on
+[llama.cpp](https://github.com/ggml-org/llama.cpp) via the Metal backend.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-blue.svg)](https://www.rust-lang.org)
-
-## Summary
-
-In standard AI agent architectures, an agent loop works by having the LLM generate a tool call, stopping inference, and sending the text over an HTTP API to a Python orchestrator. The Python orchestrator parses the tool, runs the subprocess, formats the output, and sends the entire conversation history back to the LLM to resume generation.
-
-Shimmer bypasses this bottleneck by moving read-only tool execution directly to the model daemon. When Shimmer detects an agent attempting to run a command (like `rg`, `fd`, or `cat`), it pauses the GPU, natively spawns the OS subprocess, and injects the stdout results directly into the local KV cache. The model then immediately resumes generation. By eliminating the HTTP round-trip and Python serialization overhead, agents can rapidly search and read through local codebases without waiting on an external orchestrator.
-
-### Current Status (June 2026)
-
-Shimmer successfully runs SWE-bench instances with Gemma 4 12B Coding (Q4_K_M). The pipeline includes 6 safety validators (blind edit blocker, TDD enforcement, path blocker, search verifier, syntax checker, insanity detector) all operating at turn boundaries with append semantics.
-
-| Model | TPS | SWE-bench |
-|-------|-----|-----------|
-| Gemma 4 12B Coding (Q4_K_M) | 2.6-3.5 | Produces correct edits with good prompts |
-| Qwen 2.5 Coder 7B | 8.5-8.7 | Fast, lower accuracy |
-
-For a full breakdown of Shimmer's speedup, RAM footprint, and parameter scaling capabilities, see the [Performance Benchmarks](docs/BENCHMARKS.md).
-
-## Architecture
-
-Traditional agent frameworks incur latency through HTTP serialization and isolated sequential execution. Shimmer embeds agentic orchestration directly within the inference loop to minimize overhead.
-
-*   **Tree-PLD (Matrix-Matrix Prompt Lookup Decoding):** Implements speculative decoding by matching n-grams from the KV cache and branching draft trees for batch evaluation on Metal. Currently disabled for agentic workloads (n-gram drafts corrupt chat-template tool calls).
-*   **MASC (Batched Multi-Agent Concurrency):** Evaluates multiple independent agent sequences in a single forward pass by sharing the underlying system prompt KV cache.
-*   **Edit Validator Pipeline:** 6 validators guard against common model failures (editing without investigation, hallucinated paths, incorrect search strings, syntax errors). All operate at turn boundaries with append semantics.
-*   **Speculative Tool Execution:** Spawns OS subprocesses eagerly upon detecting tool invocation syntax, masking tool execution latency behind sequence generation.
-*   **ANE KV Compression:** Offloads and compresses evicted reasoning blocks into dense vectors via the Apple Neural Engine to manage context limits.
-*   **RoPE-Safe KV Compaction:** Shifts continuous KV blocks and updates Rotary Positional Embeddings to prevent OOM errors during extended context usage.
+Shimmer runs inference directly against GGUF models and can execute read-only
+shell tools (`rg`, `cat`, `fd`, `ls`, `git`) inline — capturing their output
+and injecting it back into the KV cache without an external orchestrator.
 
 ## Quick Start
 
-Shimmer is written in Rust and requires macOS running on Apple Silicon.
-
-### 1. Build and Install
+Requires macOS on Apple Silicon (M1+).
 
 ```bash
+# Build from source
 git clone https://github.com/bneb/shimmer.git
 cd shimmer
-cargo install --path .
+cargo build --release
+
+# Run a prompt
+./target/release/shimmer \
+  --main-model models/gemma4-12b.gguf \
+  --prompt "Explain how Rust's borrow checker works."
+
+# Run as an OpenAI-compatible HTTP server
+./target/release/shimmer --serve --main-model models/gemma4-12b.gguf
 ```
 
-### 2. Run the Engine
+## SWE-bench Evaluation
 
-<details open>
-<summary><b>Option A: UDS Daemon (Recommended for Zero-Latency Agents)</b></summary>
-<br>
-Start the background daemon on a Unix Domain Socket to completely eliminate TCP/IP and Nagle's algorithm overhead:
+Three modes for evaluating on [SWE-bench Lite](https://www.swebench.com/):
+
+- **Hybrid** — agentless context + up to 3 read-only tools + exact-match-only.
+  The model can verify lines with `cat` before editing. Most honest results.
+- **Agentless** — keyword-based file localization, single-shot generation
+  without tools. Fastest, avoids tool-call loops.
+- **Agentic** — full tool loop with investigation. Higher latency, loop risk.
+
+Results (hybrid, seed=42, 3 instances): **1/3 correct fixes** (django-11099,
+exact match, 137s, no tools needed).
 
 ```bash
-shimmer --daemon --main-model ~/.models/gemma-4-12b.gguf
+pip install datasets
+python3 benchmarks/agentic/generate_swe_bench.py \
+  --hybrid --sample 3 --seed 42 \
+  --model models/gemma4-12b.gguf
 ```
-</details>
 
-<details>
-<summary><b>Option B: REST API (For standard OpenAI compatibility)</b></summary>
-<br>
-If your client doesn't support UDS, you can run a standard HTTP server:
+## Models
+
+Shimmer works with any GGUF model. Tested configurations:
+
+| Model | Quantization | Notes |
+|-------|-------------|-------|
+| Gemma 4 12B Coding | Q4_K_M | Primary target; ~7GB VRAM |
+| Qwen 2.5 Coder 7B | Q4_K_M | Faster, lower edit accuracy |
+
+All runs use greedy sampling (`temp=0.0`). Speculative decoding is disabled by
+default — n-gram drafts corrupt structured output (tool calls, edit blocks).
+
+## Build & Test
 
 ```bash
-shimmer --serve --main-model ~/.models/gemma-4-12b.gguf
-```
-</details>
-
-### 3. Usage with Antigravity (`agy`)
-
-Shimmer is specifically designed to act as an ultra-fast accelerator backend for **Google Antigravity (`agy`)**, an autonomous agentic workspace platform. 
-
-To achieve the maximum 8.3x speedup, point `agy` to the Shimmer UDS socket using the custom UDS adapter (if configured), or use the standard local HTTP loopback:
-
-```bash
-agy run --agent SWE_Agent --provider openai --base-url http://127.0.0.1:8080/v1 --model gemma4-12b
+cargo build --release     # optimized build
+cargo test --lib          # Rust unit tests (72 tests)
+cargo clippy              # lint
+python3 tests/test_agentless.py  # Python harness tests (10 tests)
 ```
 
-### 4. Verify the Benchmarks
+## Project Structure
 
-Don't just take our word for it. You can independently verify the 8.3x end-to-end speedup on your own Mac by running the included `swe_bench_shimmer.py` benchmark:
-```bash
-cd benchmarks/agentic
-python swe_bench_shimmer.py
-```
+| Module | Purpose |
+|--------|---------|
+| `src/agent/` | Agent loop, generation, sampling, compaction, validators |
+| `src/tool.rs` | Shell command execution with output chunking |
+| `src/interceptor.rs` | Tool-call detection, XML edit parsing |
+| `src/main.rs` | CLI entrypoint, model config |
+| `src/server.rs` | OpenAI-compatible REST API |
+| `benchmarks/agentic/` | SWE-bench evaluation harness |
 
-## Documentation
+## License
 
-*   [Onboarding & Configuration](docs/ONBOARDING.md)
-*   [Architecture Overview](docs/ARCHITECTURE.md)
-*   [Performance Benchmarks](docs/BENCHMARKS.md)
+MIT
